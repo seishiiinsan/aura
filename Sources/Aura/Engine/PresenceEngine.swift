@@ -36,6 +36,8 @@ final class PresenceEngine {
     private(set) var runningGames: [DetectedGame] = []
     private(set) var lastSentAt: Date?
     private(set) var steamStatus: SteamStatus?
+    /// Temporary presence set from a Shortcut / URL / rule preview; wins over every source.
+    private(set) var customPresence: (presence: RichPresence, until: Date)?
 
     @ObservationIgnored private let ipc = DiscordIPC()
     @ObservationIgnored private let games = GameDetector()
@@ -273,8 +275,19 @@ final class PresenceEngine {
         }
     }
 
+    func setCustomPresence(_ presence: RichPresence?, until: Date?) {
+        if let presence, let until { customPresence = (presence, until) } else { customPresence = nil }
+        scheduleRecompute()
+    }
+
     private func buildSnapshot(_ s: AuraSettings) async -> PresenceSnapshot? {
         let strings = PresenceStrings(lang: s.language)
+        if let custom = customPresence {
+            if custom.until > Date() {
+                return PresenceSnapshot(kind: nil, sourceApp: "Aura", sourceBundleID: nil, clientID: clientID("", s), presence: custom.presence)
+            }
+            customPresence = nil
+        }
         for kind in s.priority where s.isEnabled(kind) {
             let draft: PresenceSnapshot?
             switch kind {
