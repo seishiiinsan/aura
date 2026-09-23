@@ -8,7 +8,14 @@ private let grid4 = [GridItem(.adaptive(minimum: 170), spacing: 12)]
 struct PageScroll<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
-        ScrollView { VStack(alignment: .leading, spacing: 16) { content }.padding(20) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) { content }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
+                .frame(maxWidth: 1400)
+                .frame(maxWidth: .infinity)
+        }
+        .softScrollEdges()
     }
 }
 
@@ -76,13 +83,21 @@ struct TimelinePage: View {
         let sessions = model.sessions(on: day)
         let start = Calendar.current.startOfDay(for: day)
         PageScroll {
-            HStack {
-                DatePicker("Jour", selection: $day, in: ...Date(), displayedComponents: .date).fixedSize()
-                Button { day = Calendar.current.date(byAdding: .day, value: -1, to: day)! } label: { Image(systemName: "chevron.left") }
-                Button { day = min(Date(), Calendar.current.date(byAdding: .day, value: 1, to: day)!) } label: { Image(systemName: "chevron.right") }
-                Button("Aujourd'hui") { day = Date() }
+            HStack(spacing: 10) {
+                ControlGroup {
+                    Button { day = Calendar.current.date(byAdding: .day, value: -1, to: day)! } label: { Image(systemName: "chevron.left") }
+                        .help("Jour précédent")
+                    Button("Aujourd'hui") { day = Date() }
+                    Button { day = min(Date(), Calendar.current.date(byAdding: .day, value: 1, to: day)!) } label: { Image(systemName: "chevron.right") }
+                        .help("Jour suivant")
+                }
+                .fixedSize()
+                DatePicker("Jour", selection: $day, in: ...Date(), displayedComponents: .date)
+                    .labelsHidden()
+                    .fixedSize()
                 Spacer()
-                Text("\(sessions.count) sessions").foregroundStyle(.secondary)
+                Text(day.formatted(date: .complete, time: .omitted)).font(.headline)
+                Text("· \(sessions.count) sessions").foregroundStyle(.secondary)
             }
             Card(title: "Chronologie", subtitle: "Chaque ligne est un flux d'activité parallèle") {
                 Chart(sessions) { s in
@@ -381,8 +396,8 @@ struct WrappedPage: View {
         let topTrack = s.topByCount("music", limit: 1, label: { $0.meta["track"] }, subtitle: { $0.meta["artist"] }).first
         let topLang = s.top("app", limit: 1, label: { $0.meta["language"] }).first
         PageScroll {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Ton Aura Wrapped").font(.system(size: 40, weight: .heavy, design: .rounded))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ton Aura Wrapped").font(.largeTitle.bold())
                 Text(model.period.title).font(.title3).foregroundStyle(.secondary)
             }
             LazyVGrid(columns: grid2, spacing: 16) {
@@ -419,9 +434,9 @@ struct WrappedCard: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(emoji).font(.system(size: 34))
+                Text(emoji).font(.system(size: 30))
                 Text(title).font(.callout.weight(.semibold)).foregroundStyle(.white.opacity(0.85))
-                Text(value).font(.system(size: 26, weight: .heavy, design: .rounded)).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
+                Text(value).font(.title.bold()).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
                 if let detail { Text(detail).font(.callout).foregroundStyle(.white.opacity(0.8)).lineLimit(1) }
             }
             Spacer(minLength: 0)
@@ -429,7 +444,8 @@ struct WrappedCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 170, alignment: .leading)
-        .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 22))
+        .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

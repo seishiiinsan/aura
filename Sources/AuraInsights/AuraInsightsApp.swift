@@ -13,6 +13,7 @@ struct AuraInsightsApp: App {
         }
         .defaultSize(width: 1180, height: 820)
         .windowResizability(.contentMinSize)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("Actualiser") { model.reload() }.keyboardShortcut("r")
@@ -49,17 +50,32 @@ enum InsightsPage: String, CaseIterable, Identifiable {
         }
     }
 
+    var color: Color {
+        switch self {
+        case .overview: .purple
+        case .timeline: .orange
+        case .wrapped: .pink
+        case .apps: .blue
+        case .code: .indigo
+        case .music: .pink
+        case .games: .green
+        case .media: .red
+        case .habits: .teal
+        case .data: .gray
+        }
+    }
+
     var symbol: String {
         switch self {
         case .overview: "square.grid.2x2.fill"
-        case .timeline: "calendar.day.timeline.left"
+        case .timeline: "calendar"
         case .wrapped: "gift.fill"
         case .apps: "macwindow"
         case .code: "chevron.left.forwardslash.chevron.right"
         case .music: "music.note"
         case .games: "gamecontroller.fill"
         case .media: "play.tv.fill"
-        case .habits: "chart.bar.xaxis"
+        case .habits: "chart.line.uptrend.xyaxis"
         case .data: "externaldrive.fill"
         }
     }
@@ -83,7 +99,8 @@ struct InsightsRoot: View {
                     row(.data)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210)
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         } detail: {
             Group {
                 switch page ?? .overview {
@@ -100,24 +117,39 @@ struct InsightsRoot: View {
                 }
             }
             .navigationTitle((page ?? .overview).title)
+            .navigationSubtitle(subtitle)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("Période", selection: $model.period) {
-                        ForEach(StatsPeriod.allCases) { Text($0.title).tag($0) }
+                if page != .timeline && page != .data {
+                    ToolbarItem(placement: .principal) {
+                        Picker("Période", selection: $model.period) {
+                            ForEach(StatsPeriod.allCases) { Text($0.title).tag($0) }
+                        }
+                        .nativeTabsPickerStyle()
+                        .labelsHidden()
+                        .fixedSize()
                     }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
                 }
-                ToolbarItem {
+                ToolbarItem(placement: .primaryAction) {
                     Button { model.reload() } label: { Label("Actualiser", systemImage: "arrow.clockwise") }
-                        .help("Mis à jour \(model.lastUpdate.formatted(date: .omitted, time: .standard))")
+                        .help("Mis à jour à \(model.lastUpdate.formatted(date: .omitted, time: .shortened))")
                 }
             }
         }
         .frame(minWidth: 960, minHeight: 640)
     }
 
+    private var subtitle: String {
+        let i = model.stats.interval
+        if model.isSingleDay { return i.start.formatted(date: .complete, time: .omitted) }
+        return "\(i.start.formatted(date: .abbreviated, time: .omitted)) – \(i.end.formatted(date: .abbreviated, time: .omitted))"
+    }
+
     private func row(_ p: InsightsPage) -> some View {
-        Label(p.title, systemImage: p.symbol).tag(p)
+        Label {
+            Text(p.title)
+        } icon: {
+            SettingsIcon(p.symbol, color: p.color)
+        }
+        .tag(p)
     }
 }

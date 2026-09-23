@@ -12,43 +12,45 @@ struct KPITile: View {
     var caption: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: symbol).foregroundStyle(tint)
-                Text(title).font(.caption).foregroundStyle(.secondary).textCase(.uppercase)
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                SettingsIcon(symbol, color: tint, size: 20)
+                Text(title).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
                 if let trend, trend.isFinite {
-                    Label("\(trend >= 0 ? "+" : "")\(Int((trend * 100).rounded())) %", systemImage: trend >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.caption2.bold())
+                    Text("\(trend >= 0 ? "▲" : "▼") \(abs(Int((trend * 100).rounded()))) %")
+                        .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(trend >= 0 ? .green : .orange)
+                        .help("Par rapport à la période précédente")
                 }
             }
-            Text(value).font(.system(size: 26, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.6)
-            if let caption { Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            Text(value)
+                .font(.system(.title, weight: .semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+            Text(caption ?? " ").font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14))
+        .contentSurface(cornerRadius: 12, padding: 14)
     }
 }
 
-/// Titled container for a chart or list.
+/// Titled container for a chart or list, styled like a grouped form section.
 struct Card<Content: View>: View {
     let title: String
     var subtitle: String? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.headline)
-                if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
+                if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary) }
             }
-            content
+            .padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 12) { content }
+                .contentSurface(cornerRadius: 12, padding: 14)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -73,8 +75,12 @@ struct RankingList: View {
                             Text(item.label).font(.callout.weight(.medium)).lineLimit(1)
                             if let sub = item.subtitle { Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                             GeometryReader { geo in
-                                Capsule().fill(tint.gradient)
-                                    .frame(width: max(4, geo.size.width * item.seconds / max(maxSeconds, 1)), height: 4)
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(.quaternary)
+                                    Capsule().fill(tint.gradient)
+                                        .frame(width: max(4, geo.size.width * item.seconds / max(maxSeconds, 1)))
+                                }
+                                .frame(height: 4)
                             }
                             .frame(height: 4)
                         }
@@ -105,11 +111,11 @@ struct Artwork: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
     }
 
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: size * 0.22).fill(.quaternary)
+        RoundedRectangle(cornerRadius: size * 0.22, style: .continuous).fill(.quaternary)
             .overlay(Image(systemName: "sparkles").font(.system(size: size * 0.35)).foregroundStyle(.secondary))
     }
 }
@@ -176,7 +182,7 @@ struct DonutChart: View {
             .frame(width: 150, height: 150)
             .overlay {
                 VStack(spacing: 0) {
-                    Text(Format.hours(total)).font(.title3.bold())
+                    Text(Format.hours(total)).font(.title3.weight(.semibold).monospacedDigit())
                     Text("au total").font(.caption2).foregroundStyle(.secondary)
                 }
             }
