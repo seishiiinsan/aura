@@ -19,6 +19,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Aura"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+if [ -n "${AURA_VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $AURA_VERSION" "$APP/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${AURA_BUILD:-1}" "$APP/Contents/Info.plist"
+fi
 if [ ! -f build/AppIcon.icns ] || [ scripts/make-icon.swift -nt build/AppIcon.icns ]; then
   echo "▸ Rendering icon…"
   swift scripts/make-icon.swift build/AppIcon.icns >/dev/null
@@ -30,16 +34,22 @@ rm -rf "$INSIGHTS"
 mkdir -p "$INSIGHTS/Contents/MacOS" "$INSIGHTS/Contents/Resources"
 cp "$BIN_DIR/AuraInsights" "$INSIGHTS/Contents/MacOS/AuraInsights"
 cp Resources/Insights-Info.plist "$INSIGHTS/Contents/Info.plist"
+if [ -n "${AURA_VERSION:-}" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $AURA_VERSION" "$INSIGHTS/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${AURA_BUILD:-1}" "$INSIGHTS/Contents/Info.plist"
+fi
 if [ ! -f build/InsightsIcon.icns ] || [ scripts/make-icon.swift -nt build/InsightsIcon.icns ]; then
   swift scripts/make-icon.swift build/InsightsIcon.icns --insights >/dev/null
 fi
 cp build/InsightsIcon.icns "$INSIGHTS/Contents/Resources/InsightsIcon.icns"
 
 echo "▸ Signing ($SIGN_ID)…"
-codesign --force --options runtime --timestamp=none \
+TIMESTAMP="--timestamp=none"
+[ "$SIGN_ID" != "-" ] && TIMESTAMP="--timestamp"
+codesign --force --options runtime $TIMESTAMP \
   --entitlements Resources/Aura.entitlements --sign "$SIGN_ID" "$APP"
 codesign --verify --strict "$APP"
-codesign --force --options runtime --timestamp=none --sign "$SIGN_ID" "$INSIGHTS"
+codesign --force --options runtime $TIMESTAMP --sign "$SIGN_ID" "$INSIGHTS"
 codesign --verify --strict "$INSIGHTS"
 
 if [ "${1:-}" = "--install" ]; then

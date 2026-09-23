@@ -161,6 +161,7 @@ final class PresenceEngine {
         if tickCount % 5 == 0 { Task { await rescanGames() } }
         if tickCount % 10 == 1 { Task { await refreshSteam() } }
         if tickCount % 2 == 0 { checkFocus() }
+        if tickCount % 1200 == 3, store.settings.autoCheckUpdates { Updater.shared.checkIfDue() }
         refreshPermissions()
         if let app = frontApp { touchFocusSession(for: app) }
         let idle = isIdle

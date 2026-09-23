@@ -187,6 +187,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var paused = false
     var globalHotKeys = true
     var historyEnabled = true
+    var autoCheckUpdates = true
     var hasLaunchedBefore = false
     var rules: [AppRule] = []
     var profiles: [PresenceProfile] = PresenceProfile.presets
@@ -238,6 +239,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         paused = v(.paused, d.paused)
         globalHotKeys = v(.globalHotKeys, d.globalHotKeys)
         historyEnabled = v(.historyEnabled, d.historyEnabled)
+        autoCheckUpdates = v(.autoCheckUpdates, d.autoCheckUpdates)
         hasLaunchedBefore = v(.hasLaunchedBefore, d.hasLaunchedBefore)
         rules = v(.rules, d.rules)
         profiles = v(.profiles, d.profiles)
