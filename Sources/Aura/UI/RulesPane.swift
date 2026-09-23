@@ -104,6 +104,7 @@ struct RulesPane: View {
 
 struct RuleEditor: View {
     @Binding var rule: AppRule
+    @Environment(PresenceEngine.self) private var engine
 
     var body: some View {
         Form {
@@ -119,6 +120,22 @@ struct RuleEditor: View {
                     ForEach(RuleMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                if rule.mode == .customize {
+                    HStack {
+                        Button {
+                            engine.preview(rule)
+                        } label: {
+                            Label("Tester 10 s sur Discord", systemImage: "play.circle")
+                        }
+                        .disabled(engine.previewEndsAt != nil)
+                        if let end = engine.previewEndsAt {
+                            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                                Text("Aperçu en ligne… \(max(0, Int(end.timeIntervalSince(ctx.date))))s")
+                                    .font(.caption).foregroundStyle(.green)
+                            }
+                        }
+                    }
+                }
             }
 
             ConditionsEditor(conditions: $rule.conditions)
