@@ -265,7 +265,8 @@ struct SourcesPane: View {
             Section("Musique") {
                 Toggle("Afficher aussi la musique en pause", isOn: $store.settings.musicShowPaused)
                 Toggle("Barre de progression du morceau", isOn: $store.settings.showMusicProgress)
-                Text("Spotify et Apple Music sont pris en charge, avec pochette et bouton d'écoute.")
+                Toggle("Autres lecteurs (onglets web, TIDAL, Deezer…)", isOn: $store.settings.musicOtherPlayers)
+                Text("Spotify et Apple Music en natif ; YouTube Music, SoundCloud, Deezer, Spotify Web, TIDAL, Bandcamp, Amazon Music dans n'importe quel onglet, même en arrière-plan ; apps TIDAL, Deezer, Qobuz via leur fenêtre (Accessibilité).")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

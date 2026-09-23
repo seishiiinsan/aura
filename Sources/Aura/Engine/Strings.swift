@@ -40,6 +40,7 @@ struct PresenceStrings: Sendable {
     // Buttons (max 32 chars)
     func listenOnSpotify() -> String { t("Écouter sur Spotify", "Listen on Spotify") }
     func listenOnAppleMusic() -> String { t("Écouter sur Apple Music", "Listen on Apple Music") }
+    func listenOn(_ service: String) -> String { t("Écouter sur \(service)", "Listen on \(service)") }
     func watchOnYouTube() -> String { t("Voir sur YouTube", "Watch on YouTube") }
     func watchOnTwitch() -> String { t("Regarder sur Twitch", "Watch on Twitch") }
     func viewOnGitHub() -> String { t("Voir sur GitHub", "View on GitHub") }

@@ -103,6 +103,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var priority: [SourceKind] = [.game, .video, .music, .app]
     var disabledSources: Set<SourceKind> = []
     var musicShowPaused = false
+    var musicOtherPlayers = true
 
     // Content
     var language: PresenceLanguage = .fr
@@ -143,6 +144,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         for kind in SourceKind.allCases where !priority.contains(kind) { priority.append(kind) }
         disabledSources = v(.disabledSources, d.disabledSources)
         musicShowPaused = v(.musicShowPaused, d.musicShowPaused)
+        musicOtherPlayers = v(.musicOtherPlayers, d.musicOtherPlayers)
         language = v(.language, d.language)
         showWindowTitles = v(.showWindowTitles, d.showWindowTitles)
         showBrowserPageTitles = v(.showBrowserPageTitles, d.showBrowserPageTitles)
