@@ -10,6 +10,15 @@ struct ServicesPane: View {
         @Bindable var store = store
         Form {
             Section {
+                TextField("URL de base", text: $store.settings.iconHost)
+                    .font(.caption.monospaced())
+                Button("Rétablir le dépôt Aura") { store.settings.iconHost = HostedIcons.defaultBase }
+            } header: {
+                Text("Icônes d'apps hébergées")
+            } footer: {
+                Text("Aura affiche les vraies icônes macOS publiées dans le dépôt (dossier assets/icons). Pour ajouter les tiennes : `swift scripts/export-icons.swift <bundle.id>` dans ton fork, puis indique son URL raw ici. Laisse vide pour désactiver.")
+            }
+            Section {
                 TextField("SteamID64 ou nom de profil personnalisé", text: $store.settings.steamAccount)
                 SecureField("Clé API Web Steam", text: $steamKey)
                     .onChange(of: steamKey) { _, key in

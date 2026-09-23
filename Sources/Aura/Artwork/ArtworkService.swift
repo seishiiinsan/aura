@@ -126,7 +126,12 @@ actor ArtworkService {
     // MARK: Apps
 
     /// Best available icon for a macOS app: App Store artwork, then website icon.
+    /// Base URL of the hosted icon set (see `HostedIcons`); empty disables it.
+    private var iconHost = HostedIcons.defaultBase
+    func setIconHost(_ base: String) { if base != iconHost { iconHost = base; cache = cache.filter { !$0.key.hasPrefix("app|") } } }
+
     func appIcon(bundleID: String?, name: String) async -> String? {
+        if !iconHost.isEmpty, let hosted = await HostedIcons.shared.url(for: bundleID, base: iconHost) { return hosted }
         let key = "app|\(bundleID ?? name)"
         let domain = AppCatalog.info(for: bundleID)?.domain
         return await memo(key) { [self] in
