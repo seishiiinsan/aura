@@ -329,6 +329,11 @@ final class PresenceEngine {
             case "Steam": "store.steampowered.com"
             case "GeForce NOW": "nvidia.com"
             case "Xbox Cloud Gaming": "xbox.com"
+            case "Epic Games": "epicgames.com"
+            case "GOG": "gog.com"
+            case "Battle.net": "battle.net"
+            case "CrossOver": "codeweavers.com"
+            case "Whisky": "getwhisky.app"
             default: AppCatalog.info(for: game.bundleID)?.domain
             }
             p.smallImage = domain.map { AppCatalog.faviconURL(domain: $0) }

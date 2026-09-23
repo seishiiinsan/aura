@@ -170,6 +170,13 @@ final class GameDetector {
             game.platform = "Steam"
         }
 
+        // 1b. Epic, Heroic, GOG and Battle.net libraries
+        if !isGame, let path, let launcher = LauncherLibraries.match(path: path) {
+            isGame = true
+            game.name = launcher.name
+            game.platform = launcher.platform
+        }
+
         // 2. Declared category in Info.plist
         if !isGame, let url = app.bundleURL, let info = Bundle(url: url)?.infoDictionary,
            let cat = info["LSApplicationCategoryType"] as? String, cat.contains("games") {
