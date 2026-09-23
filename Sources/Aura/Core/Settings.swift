@@ -133,6 +133,10 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var hasLaunchedBefore = false
     var rules: [AppRule] = []
     var profiles: [PresenceProfile] = PresenceProfile.presets
+    /// Focus name → profile name to activate while that Focus is on.
+    var focusProfiles: [String: String] = [:]
+    /// Profile restored when no Focus is active ("" = leave as is).
+    var noFocusProfile = ""
     var activeProfileID: UUID? = PresenceProfile.presets.first?.id
 
     init() {}
@@ -178,6 +182,8 @@ struct AuraSettings: Codable, Equatable, Sendable {
         hasLaunchedBefore = v(.hasLaunchedBefore, d.hasLaunchedBefore)
         rules = v(.rules, d.rules)
         profiles = v(.profiles, d.profiles)
+        focusProfiles = v(.focusProfiles, d.focusProfiles)
+        noFocusProfile = v(.noFocusProfile, d.noFocusProfile)
         activeProfileID = v(.activeProfileID, d.activeProfileID)
     }
 
