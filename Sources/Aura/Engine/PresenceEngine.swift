@@ -573,6 +573,14 @@ final class PresenceEngine {
             p.state = project.map(t.project) ?? (file != nil ? t.workspace(name) : nil)
             vars["file"] = file ?? ""
             vars["project"] = project ?? ""
+            if s.codingLanguageIcons, let file, let language = Languages.language(forFile: file) {
+                // vscord style: language as the big picture, editor as the badge.
+                p.largeImage = language.iconURL
+                p.largeText = language.name
+                p.smallImage = await ArtworkService.shared.appIcon(bundleID: bundleID, name: name)
+                p.smallText = name
+                vars["language"] = language.name
+            }
         case .terminal:
             p.details = t.inTerminal()
             p.state = name

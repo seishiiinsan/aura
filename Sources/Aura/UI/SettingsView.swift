@@ -306,6 +306,7 @@ struct DisplayPane: View {
             Section("Éléments de la présence") {
                 Toggle("Temps écoulé", isOn: $store.settings.showElapsedTime)
                 Toggle("Petite icône (plateforme, lecteur, navigateur)", isOn: $store.settings.showSmallIcon)
+                Toggle("Logo du langage quand tu codes (Swift, TypeScript, Python…)", isOn: $store.settings.codingLanguageIcons)
                 Toggle("Boutons (Écouter sur Spotify, Voir sur YouTube…)", isOn: $store.settings.showButtons)
             }
             Section {
