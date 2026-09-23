@@ -29,6 +29,19 @@ enum WindowInspector {
         var documentPath: String?
     }
 
+    /// Title of the app's main window, even when it isn't frontmost.
+    static func mainWindowTitle(pid: pid_t) -> String? {
+        guard isTrusted else { return nil }
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        var windowRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXMainWindowAttribute as CFString, &windowRef) == .success,
+              let windowRef, CFGetTypeID(windowRef) == AXUIElementGetTypeID() else { return nil }
+        var titleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(windowRef as! AXUIElement, kAXTitleAttribute as CFString, &titleRef)
+        return (titleRef as? String).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
     static func focusedWindow(pid: pid_t) -> Focused? {
         guard isTrusted else { return nil }
         let app = AXUIElementCreateApplication(pid)
@@ -66,6 +79,30 @@ enum BrowserInspector {
 
     static func supports(_ bundleID: String) -> Bool {
         chromium.contains(bundleID) || safari.contains(bundleID)
+    }
+
+    /// Every tab of every window (used to find music playing in background tabs).
+    static func allTabs(bundleID: String, appName: String) async -> [Tab] {
+        let isSafari = safari.contains(bundleID)
+        guard isSafari || chromium.contains(bundleID) else { return [] }
+        let titleKey = isSafari ? "name" : "title"
+        let script = """
+        tell application id "\(bundleID)"
+            set out to {}
+            repeat with w in windows
+                repeat with t in tabs of w
+                    set end of out to (URL of t) & (ASCII character 10) & (\(titleKey) of t)
+                end repeat
+            end repeat
+            return out
+        end tell
+        """
+        guard let rows = await AppleScriptRunner.shared.run(script, app: appName) else { return [] }
+        return rows.compactMap { row in
+            let parts = row.components(separatedBy: "\n")
+            guard parts.count >= 2, !parts[0].isEmpty else { return nil }
+            return Tab(url: parts[0], title: parts.dropFirst().joined(separator: "\n"))
+        }
     }
 
     static func activeTab(bundleID: String, appName: String) async -> Tab? {

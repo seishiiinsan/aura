@@ -3,11 +3,48 @@ import Foundation
 import Observation
 
 struct NowPlaying: Equatable, Sendable {
-    enum Player: String, Sendable {
-        case spotify = "com.spotify.client"
-        case appleMusic = "com.apple.Music"
+    enum Player: Hashable, Sendable {
+        case spotify
+        case appleMusic
+        /// A web player in a browser tab (YouTube Music, SoundCloud, Deezer…).
+        case web(site: String, domain: String)
+        /// Another desktop player read from its window title (TIDAL, Deezer…).
+        case app(bundleID: String, name: String)
 
-        var name: String { self == .spotify ? "Spotify" : "Apple Music" }
+        init?(bundleID: String) {
+            switch bundleID {
+            case "com.spotify.client": self = .spotify
+            case "com.apple.Music": self = .appleMusic
+            default: return nil
+            }
+        }
+
+        var bundleID: String {
+            switch self {
+            case .spotify: "com.spotify.client"
+            case .appleMusic: "com.apple.Music"
+            case .web(let site, _): "web:" + site
+            case .app(let id, _): id
+            }
+        }
+
+        var name: String {
+            switch self {
+            case .spotify: "Spotify"
+            case .appleMusic: "Apple Music"
+            case .web(let site, _): site
+            case .app(_, let name): name
+            }
+        }
+
+        var domain: String {
+            switch self {
+            case .spotify: "spotify.com"
+            case .appleMusic: "music.apple.com"
+            case .web(_, let domain): domain
+            case .app(let id, _): AppCatalog.info(for: id)?.domain ?? "apple.com"
+            }
+        }
     }
 
     var player: Player
@@ -22,7 +59,7 @@ struct NowPlaying: Equatable, Sendable {
     /// When `position` was sampled; used to extrapolate the progress bar.
     var sampledAt: Date = .now
 
-    var trackKey: String { "\(player.rawValue)|\(title)|\(artist)|\(album)" }
+    var trackKey: String { "\(player.bundleID)|\(title)|\(artist)|\(album)" }
 
     var startDate: Date { sampledAt.addingTimeInterval(-position) }
     var endDate: Date? { duration > 0 ? startDate.addingTimeInterval(duration) : nil }
@@ -41,6 +78,10 @@ final class MediaMonitor {
     @ObservationIgnored private var states: [NowPlaying.Player: NowPlaying] = [:]
     @ObservationIgnored private var lastPlayingPlayer: NowPlaying.Player?
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var extraTimer: Timer?
+    @ObservationIgnored private var extra: NowPlaying?
+    /// Enables browser tabs and other desktop players.
+    @ObservationIgnored var includeOtherPlayers = true
 
     private static let spotifyScript = """
     tell application id "com.spotify.client"
@@ -83,7 +124,7 @@ final class MediaMonitor {
         ) { [weak self] note in
             let bundleID = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
             MainActor.assumeIsolated {
-                guard let self, let bundleID, let player = NowPlaying.Player(rawValue: bundleID) else { return }
+                guard let self, let bundleID, let player = NowPlaying.Player(bundleID: bundleID) else { return }
                 self.states[player] = nil
                 self.publish()
             }
@@ -92,11 +133,39 @@ final class MediaMonitor {
         timer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshAll() }
         }
+        extraTimer = Timer.scheduledTimer(withTimeInterval: 6, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshExtra() }
+        }
         refreshAll()
+        refreshExtra()
+    }
+
+    /// Polls web players and other desktop apps (skipped while Spotify / Music is playing).
+    func refreshExtra() {
+        guard includeOtherPlayers else {
+            if extra != nil { extra = nil; publish() }
+            return
+        }
+        if states.values.contains(where: \.isPlaying) { return }
+        Task {
+            var found = await ExtraMusicSources.webTrack()?.0
+            if found == nil { found = ExtraMusicSources.desktopTrack() }
+            if var found {
+                // Keep the original start date while the same track keeps playing.
+                if let previous = self.extra, previous.trackKey == found.trackKey { found.sampledAt = previous.sampledAt }
+                if let previous = self.extra, previous.trackKey == found.trackKey, previous.artworkURL != nil {
+                    found.artworkURL = previous.artworkURL
+                }
+            }
+            if found != self.extra {
+                self.extra = found
+                self.publish()
+            }
+        }
     }
 
     private func isRunning(_ player: NowPlaying.Player) -> Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: player.rawValue).isEmpty
+        !NSRunningApplication.runningApplications(withBundleIdentifier: player.bundleID).isEmpty
     }
 
     func refreshAll() {
@@ -197,6 +266,10 @@ final class MediaMonitor {
             if np.trackURL == nil { np.trackURL = trackURL }
             states[player] = np
         }
+        if var e = extra, e.trackKey == key, e.artworkURL == nil {
+            e.artworkURL = artwork
+            extra = e
+        }
         publish()
     }
 
@@ -210,6 +283,8 @@ final class MediaMonitor {
             chosen = first
         } else if let last = lastPlayingPlayer, let np = states[last] {
             chosen = np
+        } else if let extra {
+            chosen = extra
         } else {
             chosen = states.values.first
         }

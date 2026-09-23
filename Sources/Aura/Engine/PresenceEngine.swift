@@ -71,6 +71,7 @@ final class PresenceEngine {
             MainActor.assumeIsolated { self?.lastError = message }
         }
         store.onChange = { [weak self] in self?.settingsChanged() }
+        media.includeOtherPlayers = store.settings.musicOtherPlayers
         media.onChange = { [weak self] in self?.scheduleRecompute() }
         media.start()
 
@@ -188,6 +189,7 @@ final class PresenceEngine {
     }
 
     private func settingsChanged() {
+        media.includeOtherPlayers = store.settings.musicOtherPlayers
         // Rules may turn apps into games or hide them.
         games.invalidateAll()
         Task { await rescanGames() }
@@ -341,10 +343,10 @@ final class PresenceEngine {
 
     private func musicDraft(_ s: AuraSettings, _ t: PresenceStrings) async -> PresenceSnapshot? {
         guard var np = media.nowPlaying, np.isPlaying || s.musicShowPaused else { return nil }
-        let rule = s.rule(for: np.player.rawValue)
+        let rule = s.rule(for: np.player.bundleID)
         if rule?.mode == .hide { return nil }
 
-        if np.player == .appleMusic, np.artworkURL == nil {
+        if np.player != .spotify, np.artworkURL == nil {
             let art = await ArtworkService.shared.appleMusic(title: np.title, artist: np.artist, album: np.album)
             np.artworkURL = art.artwork
             np.trackURL = np.trackURL ?? art.url
@@ -358,11 +360,11 @@ final class PresenceEngine {
         if let art = np.artworkURL {
             p.largeImage = art
         } else {
-            p.largeImage = await ArtworkService.shared.appIcon(bundleID: np.player.rawValue, name: np.player.name)
+            p.largeImage = await ArtworkService.shared.appIcon(bundleID: np.player.bundleID, name: np.player.name)
         }
         p.largeText = np.album.isEmpty ? np.title : np.album
         if s.showSmallIcon {
-            p.smallImage = AppCatalog.faviconURL(domain: np.player == .spotify ? "spotify.com" : "music.apple.com")
+            p.smallImage = AppCatalog.faviconURL(domain: np.player.domain)
             p.smallText = np.isPlaying ? np.player.name : "\(np.player.name) — \(t.paused())"
         }
         if np.isPlaying, s.showMusicProgress {
@@ -370,13 +372,18 @@ final class PresenceEngine {
             p.end = np.endDate
         }
         if s.showButtons, let url = np.trackURL {
-            p.buttons = [PresenceButton(label: np.player == .spotify ? t.listenOnSpotify() : t.listenOnAppleMusic(), url: url)]
+            let label = switch np.player {
+            case .spotify: t.listenOnSpotify()
+            case .appleMusic: t.listenOnAppleMusic()
+            default: t.listenOn(np.player.name)
+            }
+            p.buttons = [PresenceButton(label: label, url: url)]
         }
         var client = clientID(s.musicClientID, s)
         apply(rule, to: &p, clientID: &client, vars: [
             "app": np.player.name, "track": np.title, "artist": np.artist, "album": np.album, "title": np.title,
         ])
-        return PresenceSnapshot(kind: .music, sourceApp: np.player.name, sourceBundleID: np.player.rawValue, clientID: client, presence: p)
+        return PresenceSnapshot(kind: .music, sourceApp: np.player.name, sourceBundleID: np.player.bundleID, clientID: client, presence: p)
     }
 
     // MARK: Video
