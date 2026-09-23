@@ -78,6 +78,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if LaunchAtLogin.set(true) { store.settings.hasLaunchedBefore = true }
         }
         engine.start()
+        setUpHotKeys()
+    }
+
+    private func setUpHotKeys() {
+        HotKeys.shared.onAction = { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .togglePause: store.settings.paused.toggle()
+            case .nextProfile: store.cycleProfile()
+            case .openMain: WindowOpener.shared.open?("main")
+            case .cycleSource:
+                // Rotates which source has top priority.
+                var p = store.settings.priority
+                if !p.isEmpty { p.append(p.removeFirst()) }
+                store.settings.priority = p
+            }
+        }
+        HotKeys.shared.setEnabled(store.settings.globalHotKeys)
+        var lastEnabled = store.settings.globalHotKeys
+        let previous = store.onChange
+        store.onChange = { [weak self] in
+            previous?()
+            guard let self else { return }
+            if store.settings.globalHotKeys != lastEnabled {
+                lastEnabled = store.settings.globalHotKeys
+                HotKeys.shared.setEnabled(lastEnabled)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
