@@ -314,6 +314,8 @@ struct DisplayPane: View {
                 Toggle("Temps écoulé", isOn: $store.settings.showElapsedTime)
                 Toggle("Petite icône (plateforme, lecteur, navigateur)", isOn: $store.settings.showSmallIcon)
                 Toggle("Logo du langage quand tu codes (Swift, TypeScript, Python…)", isOn: $store.settings.codingLanguageIcons)
+                Toggle("Préférer les visuels animés (GIF, WebP)", isOn: $store.settings.preferAnimatedArtwork)
+                    .help("Jaquettes animées SteamGridDB pour les jeux ; tu peux aussi mettre l'URL d'un GIF dans une règle.")
                 Toggle("Boutons (Écouter sur Spotify, Voir sur YouTube…)", isOn: $store.settings.showButtons)
             }
             Section {

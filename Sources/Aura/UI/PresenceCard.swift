@@ -128,7 +128,9 @@ struct RemoteImage: View {
     var symbol = "photo"
 
     var body: some View {
-        if let url, let u = URL(string: url) {
+        if let url, let u = URL(string: url), Self.isAnimated(url) {
+            AnimatedRemoteImage(url: u)
+        } else if let url, let u = URL(string: url) {
             AsyncImage(url: u, transaction: Transaction(animation: .easeInOut(duration: 0.2))) { phase in
                 switch phase {
                 case .success(let image): image.resizable().scaledToFill()
@@ -138,6 +140,11 @@ struct RemoteImage: View {
         } else {
             placeholder
         }
+    }
+
+    static func isAnimated(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        return lower.contains(".gif") || lower.contains(".webp") || lower.contains(".apng")
     }
 
     private var placeholder: some View {
