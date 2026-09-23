@@ -39,6 +39,8 @@ struct MenuBarView: View {
 
             sourcesRow
 
+            profileMenu
+
             Divider()
 
             HStack {
@@ -71,6 +73,22 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 340)
+    }
+
+    private var profileMenu: some View {
+        Menu {
+            ForEach(store.settings.profiles) { profile in
+                Button {
+                    store.activate(profile)
+                } label: {
+                    Label(profile.name, systemImage: profile.id == store.settings.activeProfileID ? "checkmark" : profile.symbol)
+                }
+            }
+        } label: {
+            Label("Profil : \(store.activeProfile?.name ?? "Personnalisé")", systemImage: store.activeProfile?.symbol ?? "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     private var sourcesRow: some View {

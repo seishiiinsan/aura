@@ -132,6 +132,8 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var paused = false
     var hasLaunchedBefore = false
     var rules: [AppRule] = []
+    var profiles: [PresenceProfile] = PresenceProfile.presets
+    var activeProfileID: UUID? = PresenceProfile.presets.first?.id
 
     init() {}
 
@@ -175,6 +177,8 @@ struct AuraSettings: Codable, Equatable, Sendable {
         paused = v(.paused, d.paused)
         hasLaunchedBefore = v(.hasLaunchedBefore, d.hasLaunchedBefore)
         rules = v(.rules, d.rules)
+        profiles = v(.profiles, d.profiles)
+        activeProfileID = v(.activeProfileID, d.activeProfileID)
     }
 
     func rule(for bundleID: String?) -> AppRule? {
