@@ -75,6 +75,7 @@ final class PresenceEngine {
         }
         store.onChange = { [weak self] in self?.settingsChanged() }
         media.includeOtherPlayers = store.settings.musicOtherPlayers
+        configureArtwork()
         media.onChange = { [weak self] in self?.scheduleRecompute() }
         media.start()
 
