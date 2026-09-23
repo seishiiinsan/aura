@@ -136,11 +136,15 @@ struct RuleEditor: View {
                     Text("Variables : " + Template.variables.map { "{\($0)}" }.joined(separator: " ") + "  — ainsi que {details} et {state} pour réutiliser le texte automatique.")
                 }
 
-                Section("Image") {
+                Section {
                     TextField("URL de l'image (https://…)", text: $rule.largeImageURL, prompt: Text("Automatique (icône, pochette, jaquette…)"))
                     if !rule.largeImageURL.isEmpty {
                         RemoteImage(url: rule.largeImageURL).frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 8))
                     }
+                } header: {
+                    Text("Image")
+                } footer: {
+                    Text("Les GIF et WebP animés sont acceptés par Discord.")
                 }
 
                 Section("Bouton") {
