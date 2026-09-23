@@ -14,7 +14,7 @@ BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
 BIN="$BIN_DIR/Aura"
 [ -x "$BIN" ] && [ -x "$BIN_DIR/AuraInsights" ] || { echo "Build failed"; exit 1; }
 
-echo "▸ Assembling $APP…"
+echo "▸ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Aura"
@@ -29,7 +29,7 @@ if [ ! -f build/AppIcon.icns ] || [ scripts/make-icon.swift -nt build/AppIcon.ic
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
-echo "▸ Assembling $INSIGHTS…"
+echo "▸ Assembling ${INSIGHTS}…"
 rm -rf "$INSIGHTS"
 mkdir -p "$INSIGHTS/Contents/MacOS" "$INSIGHTS/Contents/Resources"
 cp "$BIN_DIR/AuraInsights" "$INSIGHTS/Contents/MacOS/AuraInsights"
@@ -43,7 +43,7 @@ if [ ! -f build/InsightsIcon.icns ] || [ scripts/make-icon.swift -nt build/Insig
 fi
 cp build/InsightsIcon.icns "$INSIGHTS/Contents/Resources/InsightsIcon.icns"
 
-echo "▸ Signing ($SIGN_ID)…"
+echo "▸ Signing (${SIGN_ID})…"
 TIMESTAMP="--timestamp=none"
 [ "$SIGN_ID" != "-" ] && TIMESTAMP="--timestamp"
 codesign --force --options runtime $TIMESTAMP \
