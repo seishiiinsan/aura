@@ -44,7 +44,10 @@ enum URLCommands {
         case "clear":
             engine.setCustomPresence(nil, until: nil)
         case "settings", "open":
-            openWindow(command == "settings" ? "settings" : "main")
+            MainNavigation.shared.pane = command == "settings" ? .general : .home
+            openWindow("main")
+        case "insights":
+            InsightsLauncher.open()
         default:
             break
         }

@@ -56,10 +56,10 @@ struct MenuBarView: View {
                 Button {
                     openSettings()
                 } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "macwindow")
                 }
                 .buttonStyle(.borderless)
-                .help("Réglages")
+                .help("Ouvrir Aura")
                 .keyboardShortcut(",")
                 Button {
                     NSApp.terminate(nil)
@@ -114,7 +114,8 @@ struct MenuBarView: View {
     }
 
     private func openSettings() {
-        openWindow(id: "settings")
+        MainNavigation.shared.pane = store.settings.clientID.isEmpty ? .discord : .home
+        openWindow(id: "main")
         NSApp.activate()
     }
 }
