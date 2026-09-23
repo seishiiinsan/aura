@@ -461,19 +461,49 @@ struct PermissionRow: View {
 // MARK: - À propos
 
 struct AboutPane: View {
+    @Environment(SettingsStore.self) private var store
+    @Bindable private var updater = Updater.shared
+
     var body: some View {
-        VStack(spacing: 14) {
-            AuraLogo(size: 96)
-            Text("Aura").font(.largeTitle.bold())
-            Text("Ta Rich Presence Discord, automatique et soignée.")
-                .foregroundStyle(.secondary)
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
-                .font(.caption).foregroundStyle(.tertiary)
-            Button("Ouvrir le dossier de données") {
-                NSWorkspace.shared.open(AuraPaths.support)
+        @Bindable var store = store
+        Form {
+            Section {
+                HStack(spacing: 16) {
+                    AuraLogo(size: 72)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Aura").font(.largeTitle.bold())
+                        Text("Ta Rich Presence Discord, automatique et soignée.").foregroundStyle(.secondary)
+                        Text("Version \(updater.currentVersion)").font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+            Section("Mises à jour") {
+                Toggle("Vérifier automatiquement chaque jour", isOn: $store.settings.autoCheckUpdates)
+                HStack {
+                    switch updater.phase {
+                    case .idle: Text("Pas encore vérifié").foregroundStyle(.secondary)
+                    case .checking: ProgressView().controlSize(.small); Text("Vérification…")
+                    case .upToDate: Label("Aura est à jour", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .available(let release):
+                        Label("Version \(release.version) disponible", systemImage: "arrow.down.circle.fill").foregroundStyle(.blue)
+                        Spacer()
+                        Link("Notes", destination: release.pageURL)
+                        Button("Installer et relancer") { Task { await updater.install(release) } }
+                            .buttonStyle(.borderedProminent)
+                    case .downloading: ProgressView().controlSize(.small); Text("Téléchargement…")
+                    case .installing: ProgressView().controlSize(.small); Text("Installation…")
+                    case .failed(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                    Spacer()
+                    Button("Vérifier maintenant") { Task { await updater.check() } }
+                        .disabled(updater.phase == .checking || updater.phase == .downloading)
+                }
+            }
+            Section {
+                Link("Code source sur GitHub", destination: URL(string: "https://github.com/\(Updater.repository)")!)
+                Button("Ouvrir le dossier de données") { NSWorkspace.shared.open(AuraPaths.support) }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
     }
 }
