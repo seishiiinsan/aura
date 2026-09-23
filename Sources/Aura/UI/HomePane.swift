@@ -1,4 +1,5 @@
 import AppKit
+import AuraKit
 import SwiftUI
 
 /// Live dashboard: what Aura broadcasts right now and what every source sees.
@@ -22,6 +23,7 @@ struct HomePane: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                TodaySummary()
                 Text("Sources").font(.title3.bold())
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 14)], spacing: 14) {
                     SourceTile(kind: .game, detail: gameDetail)
@@ -138,5 +140,46 @@ enum InsightsLauncher {
             return
         }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+}
+
+/// Today's totals from the history, refreshed every minute.
+struct TodaySummary: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let interval = StatsPeriod.today.interval(now: context.date)
+            let stats = Stats(sessions: HistoryStore.shared.sessions(from: interval.start, to: interval.end), interval: interval)
+            let topApp = stats.top("app", limit: 1, label: { $0.name }).first
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Aujourd'hui").font(.title3.bold())
+                    Spacer()
+                    Button("Toutes les stats") { InsightsLauncher.open() }.buttonStyle(.link)
+                }
+                HStack(spacing: 12) {
+                    MiniStat(symbol: "bolt.fill", tint: .purple, title: "Actif", value: Format.duration(stats.activeTime()))
+                    MiniStat(symbol: "gamecontroller.fill", tint: .green, title: "Jeu", value: Format.duration(stats.total("game")))
+                    MiniStat(symbol: "music.note", tint: .pink, title: "Musique", value: Format.duration(stats.total("music")))
+                    MiniStat(symbol: "macwindow", tint: .blue, title: topApp?.label ?? "Top app", value: Format.duration(topApp?.seconds ?? 0))
+                }
+            }
+        }
+    }
+}
+
+struct MiniStat: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: symbol).font(.caption).foregroundStyle(tint).lineLimit(1)
+            Text(value).font(.title3.bold().monospacedDigit())
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }

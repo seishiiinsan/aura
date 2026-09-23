@@ -164,6 +164,19 @@ struct GeneralPane: View {
                 Text("Raccourcis")
             }
 
+            Section {
+                Toggle("Enregistrer l'historique des activités", isOn: $store.settings.historyEnabled)
+                HStack {
+                    Button("Ouvrir Aura Insights") { InsightsLauncher.open() }
+                    Spacer()
+                    Text("Stocké localement sur ton Mac").font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Historique & statistiques")
+            } footer: {
+                Text("Jeux, musique, vidéos et apps sont enregistrés en parallèle dans une base locale (Application Support/Aura/history.sqlite). Rien n'est envoyé ailleurs.")
+            }
+
             Section("Langue de la présence") {
                 Picker("Textes envoyés sur Discord", selection: $store.settings.language) {
                     ForEach(PresenceLanguage.allCases) { Text($0.title).tag($0) }
