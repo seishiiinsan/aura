@@ -104,6 +104,18 @@ struct GeneralPane: View {
                 Toggle("Mettre la diffusion en pause", isOn: $store.settings.paused)
             }
 
+            Section {
+                Toggle("Raccourcis clavier globaux", isOn: $store.settings.globalHotKeys)
+                if store.settings.globalHotKeys {
+                    LabeledContent("Pause / reprise", value: "⌃⌥⌘P")
+                    LabeledContent("Profil suivant", value: "⌃⌥⌘N")
+                    LabeledContent("Changer la source prioritaire", value: "⌃⌥⌘S")
+                    LabeledContent("Ouvrir Aura", value: "⌃⌥⌘A")
+                }
+            } header: {
+                Text("Raccourcis")
+            }
+
             Section("Langue de la présence") {
                 Picker("Textes envoyés sur Discord", selection: $store.settings.language) {
                     ForEach(PresenceLanguage.allCases) { Text($0.title).tag($0) }
