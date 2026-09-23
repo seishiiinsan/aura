@@ -80,7 +80,51 @@ actor ArtworkService {
 
     // MARK: Games
 
+    // MARK: SteamGridDB
+
+    private var gridKey: String?
+    private var preferAnimated = false
+    func configureSteamGridDB(key: String?, animated: Bool) {
+        if key != gridKey || animated != preferAnimated {
+            gridKey = key
+            preferAnimated = animated
+            cache = cache.filter { !$0.key.hasPrefix("sgdb|") }
+        }
+    }
+
+    /// Square cover from SteamGridDB (community artwork, needs a free API key).
+    func steamGridDBCover(name: String, steamAppID: String?) async -> String? {
+        guard let key = gridKey, !key.isEmpty else { return nil }
+        let animated = preferAnimated
+        return await memo("sgdb|\(steamAppID ?? name)|\(animated)") {
+            func get(_ path: String, _ query: [String: String] = [:]) async -> [String: Any]? {
+                guard let url = HTTP.url("https://www.steamgriddb.com/api/v2/" + path, query) else { return nil }
+                var req = URLRequest(url: url)
+                req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                guard let (data, resp) = try? await HTTP.session.data(for: req),
+                      (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+                return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            }
+            var gamePath: String?
+            if let steamAppID { gamePath = "grids/steam/\(steamAppID)" }
+            else if let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                    let search = await get("search/autocomplete/\(encoded)"),
+                    let first = (search["data"] as? [[String: Any]])?.first, let id = first["id"] as? Int {
+                gamePath = "grids/game/\(id)"
+            }
+            guard let gamePath else { return nil }
+            var query = ["dimensions": "512x512,1024x1024"]
+            if animated { query["types"] = "animated" }
+            var grids = await get(gamePath, query)?["data"] as? [[String: Any]] ?? []
+            if grids.isEmpty, animated {
+                grids = await get(gamePath, ["dimensions": "512x512,1024x1024"])?["data"] as? [[String: Any]] ?? []
+            }
+            return grids.first?["url"] as? String
+        }
+    }
+
     func gameCover(_ game: DetectedGame) async -> String? {
+        if let grid = await steamGridDBCover(name: game.name, steamAppID: game.steamAppID) { return grid }
         if let icon = game.discordIconURL { return icon }
         if let id = game.steamAppID { return await steamCover(appID: id) }
         let name = game.name
