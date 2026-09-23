@@ -98,6 +98,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var videoClientID: String = ""
     var codingClientID: String = ""
     var useOfficialGameIdentity = true
+    var steamAccount = ""
 
     // Sources
     var priority: [SourceKind] = [.game, .video, .music, .app]
@@ -140,6 +141,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         videoClientID = v(.videoClientID, d.videoClientID)
         codingClientID = v(.codingClientID, d.codingClientID)
         useOfficialGameIdentity = v(.useOfficialGameIdentity, d.useOfficialGameIdentity)
+        steamAccount = v(.steamAccount, d.steamAccount)
         priority = v(.priority, d.priority)
         for kind in SourceKind.allCases where !priority.contains(kind) { priority.append(kind) }
         disabledSources = v(.disabledSources, d.disabledSources)

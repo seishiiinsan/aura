@@ -35,6 +35,7 @@ final class PresenceEngine {
     private(set) var automationDenied: Set<String> = []
     private(set) var runningGames: [DetectedGame] = []
     private(set) var lastSentAt: Date?
+    private(set) var steamStatus: SteamStatus?
 
     @ObservationIgnored private let ipc = DiscordIPC()
     @ObservationIgnored private let games = GameDetector()
@@ -145,6 +146,7 @@ final class PresenceEngine {
         tickCount += 1
         // Wine games don't post NSWorkspace launch notifications: rescan every 15 s.
         if tickCount % 5 == 0 { Task { await rescanGames() } }
+        if tickCount % 10 == 1 { Task { await refreshSteam() } }
         refreshPermissions()
         if let app = frontApp { touchFocusSession(for: app) }
         let idle = isIdle
@@ -191,6 +193,19 @@ final class PresenceEngine {
         found.sort { ($0.launchDate ?? .distantPast) > ($1.launchDate ?? .distantPast) }
         if found != runningGames {
             runningGames = found
+            scheduleRecompute()
+        }
+    }
+
+    func refreshSteam() async {
+        let account = store.settings.steamAccount
+        guard !account.isEmpty, let key = Keychain.get(SecretKey.steamAPI), !key.isEmpty else {
+            if steamStatus != nil { steamStatus = nil; scheduleRecompute() }
+            return
+        }
+        let status = await SteamWebPresence.shared.status(account: account, apiKey: key)
+        if status != steamStatus {
+            steamStatus = status
             scheduleRecompute()
         }
     }
@@ -277,6 +292,10 @@ final class PresenceEngine {
         var game: DetectedGame
         if let native = runningGames.first(where: { $0.pid == frontPID }) ?? runningGames.first(where: { !$0.isCloud }) ?? runningGames.first {
             game = native
+        } else if let steam = steamStatus {
+            // Playing on another device (Steam Deck, PC, Steam Link…).
+            game = DetectedGame(name: steam.gameName, pid: -1, launchDate: videoStart("steam:" + steam.appID),
+                                steamAppID: steam.appID, platform: "Steam")
         } else if let tab = browserTab, let app = frontApp,
                   let cloud = GameDetector.browserCloudGame(url: tab.url, title: tab.title) {
             game = DetectedGame(name: cloud.name, bundleID: app.bundleIdentifier, pid: app.processIdentifier,
@@ -306,12 +325,13 @@ final class PresenceEngine {
             game.discordIconURL = entry.iconURL
         }
         let inLauncher = game.isCloud && game.name == game.platform
+        let steamRich = steamStatus.flatMap { $0.appID == game.steamAppID ? $0.richPresence : nil }
 
         let official = s.useOfficialGameIdentity ? game.discordAppID : nil
         var p = RichPresence(type: .playing)
         if official != nil {
             p.statusDisplay = .name
-            p.details = t.inGame()
+            p.details = steamRich ?? t.inGame()
             p.state = game.platform.map(t.via)
         } else if inLauncher {
             p.statusDisplay = .details
@@ -320,7 +340,7 @@ final class PresenceEngine {
         } else {
             p.statusDisplay = .details
             p.details = game.name
-            p.state = game.platform.map(t.via) ?? t.inGame()
+            p.state = steamRich ?? game.platform.map(t.via) ?? t.inGame()
         }
         p.largeImage = await ArtworkService.shared.gameCover(game)
         p.largeText = game.name
@@ -347,7 +367,7 @@ final class PresenceEngine {
         }
         var client = clientID(s.gameClientID, s)
         if let official { client = official }
-        apply(rule, to: &p, clientID: &client, vars: ["app": game.platform ?? game.name, "game": game.name])
+        apply(rule, to: &p, clientID: &client, vars: ["app": game.platform ?? game.name, "game": game.name, "status": steamRich ?? ""])
         return PresenceSnapshot(kind: .game, sourceApp: game.name, sourceBundleID: game.bundleID, clientID: client, presence: p)
     }
 
