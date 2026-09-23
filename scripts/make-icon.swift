@@ -74,6 +74,24 @@ func render(size: CGFloat) -> NSBitmapImageRep {
     }
     ctx.restoreGState()
 
+    if insights {
+        // Bar chart instead of the sparkle.
+        ctx.setShadow(offset: .zero, blur: s * 0.03, color: NSColor.white.withAlphaComponent(0.8).cgColor)
+        ctx.setFillColor(NSColor.white.cgColor)
+        let barW = s * 0.045, gap = s * 0.028
+        let heights: [CGFloat] = [0.07, 0.12, 0.09, 0.15]
+        let totalW = CGFloat(heights.count) * barW + CGFloat(heights.count - 1) * gap
+        for (i, h) in heights.enumerated() {
+            let x = center.x - totalW / 2 + CGFloat(i) * (barW + gap)
+            let rect = CGRect(x: x, y: center.y - s * 0.075, width: barW, height: s * h)
+            ctx.addPath(CGPath(roundedRect: rect, cornerWidth: barW / 2, cornerHeight: barW / 2, transform: nil))
+            ctx.fillPath()
+        }
+        ctx.restoreGState()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
+    }
+
     // Four-point sparkle
     ctx.setShadow(offset: .zero, blur: s * 0.03, color: NSColor.white.withAlphaComponent(0.8).cgColor)
     let r = s * 0.12, k = s * 0.022
@@ -92,8 +110,10 @@ func render(size: CGFloat) -> NSBitmapImageRep {
     return rep
 }
 
-let output = CommandLine.arguments.dropFirst().first ?? "AppIcon.icns"
-let iconset = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("AppIcon.iconset")
+let args = CommandLine.arguments.dropFirst()
+let insights = args.contains("--insights")
+let output = args.first { !$0.hasPrefix("--") } ?? "AppIcon.icns"
+let iconset = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(insights ? "Insights.iconset" : "AppIcon.iconset")
 try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 for base in [16, 32, 128, 256, 512] {

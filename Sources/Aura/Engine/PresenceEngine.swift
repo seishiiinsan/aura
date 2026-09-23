@@ -1,4 +1,5 @@
 import AppKit
+import AuraKit
 import Foundation
 import Observation
 import OSLog
@@ -11,6 +12,8 @@ struct PresenceSnapshot: Equatable {
     var clientID: String
     var presence: RichPresence
     var isIdle = false
+    /// Structured facts about the activity (file, project, artist, platform…), stored in the history.
+    var meta: [String: String] = [:]
 }
 
 /// Public metadata of a Discord application (name shown after "Playing").
@@ -96,6 +99,9 @@ final class PresenceEngine {
                     Task { await self?.rescanGames() }
                 }
             }
+        }
+        nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closeHistory() }
         }
         nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.reconnect() }
@@ -321,6 +327,32 @@ final class PresenceEngine {
 
     private(set) var previewEndsAt: Date?
 
+    // MARK: - History
+
+    @ObservationIgnored private let recorder = HistoryRecorder()
+
+    private func recordHistory(_ drafts: [SourceKind: PresenceSnapshot], strings: PresenceStrings) {
+        var observations: [String: ActivityObservation] = [:]
+        for (kind, d) in drafts {
+            if kind == .music, d.meta["paused"] == "1" { continue } // paused music isn't listening time
+            if kind == .game, d.meta["launcher"] == "1" { continue }
+            if kind == .app, isIdle { continue }
+            observations[kind.rawValue] = ActivityObservation(
+                kind: kind.rawValue, name: d.sourceApp, bundleID: d.sourceBundleID,
+                details: d.presence.details, state: d.presence.state, image: d.presence.largeImage, meta: d.meta
+            )
+        }
+        if isIdle {
+            observations["idle"] = ActivityObservation(kind: "idle", name: strings.away())
+        }
+        let recorder = recorder
+        Task.detached(priority: .utility) { recorder.record(observations) }
+    }
+
+    func closeHistory() {
+        recorder.closeAll()
+    }
+
     func setCustomPresence(_ presence: RichPresence?, until: Date?) {
         if let presence, let until { customPresence = (presence, until) } else { customPresence = nil }
         scheduleRecompute()
@@ -334,7 +366,9 @@ final class PresenceEngine {
             }
             customPresence = nil
         }
-        for kind in s.priority where s.isEnabled(kind) {
+        // Every source is evaluated so the history records parallel activities (coding while listening…).
+        var drafts: [SourceKind: PresenceSnapshot] = [:]
+        for kind in SourceKind.allCases where s.isEnabled(kind) || s.historyEnabled {
             let draft: PresenceSnapshot?
             switch kind {
             case .game: draft = await gameDraft(s, strings)
@@ -342,7 +376,11 @@ final class PresenceEngine {
             case .music: draft = await musicDraft(s, strings)
             case .app: draft = await appDraft(s, strings)
             }
-            if var draft {
+            drafts[kind] = draft
+        }
+        if s.historyEnabled { recordHistory(drafts, strings: strings) }
+        for kind in s.priority where s.isEnabled(kind) {
+            if var draft = drafts[kind] {
                 // Apps & websites give way to the idle state; games, music and videos don't.
                 if (kind == .app) && isIdle { draft = idleDraft(s, strings) }
                 return draft
@@ -445,8 +483,13 @@ final class PresenceEngine {
         }
         var client = clientID(s.gameClientID, s)
         if let official { client = official }
-        apply(rule, to: &p, clientID: &client, vars: ["app": game.platform ?? game.name, "game": game.name, "status": steamRich ?? ""])
-        return PresenceSnapshot(kind: .game, sourceApp: game.name, sourceBundleID: game.bundleID, clientID: client, presence: p)
+        let gameVars = ["app": game.platform ?? game.name, "game": game.name, "status": steamRich ?? ""]
+        apply(rule, to: &p, clientID: &client, vars: gameVars)
+        var meta = gameVars
+        meta["platform"] = game.platform ?? "macOS"
+        if let id = game.steamAppID { meta["steamAppID"] = id }
+        if inLauncher { meta["launcher"] = "1" }
+        return PresenceSnapshot(kind: .game, sourceApp: game.name, sourceBundleID: game.bundleID, clientID: client, presence: p, meta: meta)
     }
 
     // MARK: Music
@@ -490,10 +533,13 @@ final class PresenceEngine {
             p.buttons = [PresenceButton(label: label, url: url)]
         }
         var client = clientID(s.musicClientID, s)
-        apply(rule, to: &p, clientID: &client, vars: [
-            "app": np.player.name, "track": np.title, "artist": np.artist, "album": np.album, "title": np.title,
-        ])
-        return PresenceSnapshot(kind: .music, sourceApp: np.player.name, sourceBundleID: np.player.bundleID, clientID: client, presence: p)
+        let musicVars = ["app": np.player.name, "track": np.title, "artist": np.artist, "album": np.album, "title": np.title]
+        apply(rule, to: &p, clientID: &client, vars: musicVars)
+        var meta = musicVars
+        meta["player"] = np.player.name
+        if !np.isPlaying { meta["paused"] = "1" }
+        if np.duration > 0 { meta["duration"] = String(Int(np.duration)) }
+        return PresenceSnapshot(kind: .music, sourceApp: np.player.name, sourceBundleID: np.player.bundleID, clientID: client, presence: p, meta: meta)
     }
 
     // MARK: Video
@@ -599,7 +645,9 @@ final class PresenceEngine {
             return nil
         }
         apply(rule, to: &p, clientID: &client, vars: vars)
-        return PresenceSnapshot(kind: .video, sourceApp: appName, sourceBundleID: bundleID, clientID: client, presence: p)
+        var meta = vars
+        if let state = p.state { meta["channel"] = state }
+        return PresenceSnapshot(kind: .video, sourceApp: vars["site"] ?? appName, sourceBundleID: bundleID, clientID: client, presence: p, meta: meta)
     }
 
     private func videoStart(_ key: String) -> Date {
@@ -725,7 +773,8 @@ final class PresenceEngine {
             p.start = focusSessions[bundleID ?? "pid:\(app.processIdentifier)"]?.start
         }
         apply(rule, to: &p, clientID: &client, vars: vars)
-        return PresenceSnapshot(kind: .app, sourceApp: name, sourceBundleID: bundleID, clientID: client, presence: p)
+        vars["category"] = category.rawValue
+        return PresenceSnapshot(kind: .app, sourceApp: name, sourceBundleID: bundleID, clientID: client, presence: p, meta: vars)
     }
 
     private func idleDraft(_ s: AuraSettings, _ t: PresenceStrings) -> PresenceSnapshot {
@@ -838,6 +887,7 @@ final class PresenceEngine {
     }
 
     func stop() {
+        recorder.closeAll()
         ipc.setActivity(nil)
         ipc.disconnect()
     }

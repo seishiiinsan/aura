@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Builds Aura.app (release) with SwiftPM — no Xcode project required.
+# Builds Aura.app and Aura Insights.app (release) with SwiftPM — no Xcode project required.
 # Usage: scripts/build-app.sh [--install]   (--install copies it to /Applications and launches it)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP="build/Aura.app"
+INSIGHTS="build/Aura Insights.app"
 SIGN_ID="${AURA_SIGN_IDENTITY:--}"   # "-" = ad-hoc signature
 
 echo "▸ Compiling (release)…"
 swift build -c release --arch arm64 2>&1 | grep -v "ld: warning: search path" || true
-BIN="$(swift build -c release --arch arm64 --show-bin-path)/Aura"
-[ -x "$BIN" ] || { echo "Build failed"; exit 1; }
+BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
+BIN="$BIN_DIR/Aura"
+[ -x "$BIN" ] && [ -x "$BIN_DIR/AuraInsights" ] || { echo "Build failed"; exit 1; }
 
 echo "▸ Assembling $APP…"
 rm -rf "$APP"
@@ -23,18 +25,32 @@ if [ ! -f build/AppIcon.icns ] || [ scripts/make-icon.swift -nt build/AppIcon.ic
 fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+echo "▸ Assembling $INSIGHTS…"
+rm -rf "$INSIGHTS"
+mkdir -p "$INSIGHTS/Contents/MacOS" "$INSIGHTS/Contents/Resources"
+cp "$BIN_DIR/AuraInsights" "$INSIGHTS/Contents/MacOS/AuraInsights"
+cp Resources/Insights-Info.plist "$INSIGHTS/Contents/Info.plist"
+if [ ! -f build/InsightsIcon.icns ] || [ scripts/make-icon.swift -nt build/InsightsIcon.icns ]; then
+  swift scripts/make-icon.swift build/InsightsIcon.icns --insights >/dev/null
+fi
+cp build/InsightsIcon.icns "$INSIGHTS/Contents/Resources/InsightsIcon.icns"
+
 echo "▸ Signing ($SIGN_ID)…"
 codesign --force --options runtime --timestamp=none \
   --entitlements Resources/Aura.entitlements --sign "$SIGN_ID" "$APP"
 codesign --verify --strict "$APP"
+codesign --force --options runtime --timestamp=none --sign "$SIGN_ID" "$INSIGHTS"
+codesign --verify --strict "$INSIGHTS"
 
 if [ "${1:-}" = "--install" ]; then
   echo "▸ Installing to /Applications…"
   pkill -x Aura 2>/dev/null && sleep 1 || true
-  rm -rf /Applications/Aura.app
+  pkill -x AuraInsights 2>/dev/null || true
+  rm -rf /Applications/Aura.app "/Applications/Aura Insights.app"
   cp -R "$APP" /Applications/Aura.app
+  cp -R "$INSIGHTS" "/Applications/Aura Insights.app"
   open /Applications/Aura.app
-  echo "✓ Aura installed and running."
+  echo "✓ Aura and Aura Insights installed; Aura is running."
 else
-  echo "✓ Built $APP"
+  echo "✓ Built $APP and $INSIGHTS"
 fi
