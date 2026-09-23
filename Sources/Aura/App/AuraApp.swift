@@ -33,9 +33,17 @@ struct AuraApp: App {
 struct MenuBarIcon: View {
     let engine: PresenceEngine
     let store: SettingsStore
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Image(systemName: symbol)
+            .onAppear {
+                // The menu bar label lives for the whole session: hand the window opener to AppKit code.
+                WindowOpener.shared.open = { id in
+                    openWindow(id: id)
+                    NSApp.activate()
+                }
+            }
     }
 
     private var symbol: String {
@@ -48,6 +56,12 @@ struct MenuBarIcon: View {
         default: return "sparkles"
         }
     }
+}
+
+@MainActor
+final class WindowOpener {
+    static let shared = WindowOpener()
+    var open: ((String) -> Void)?
 }
 
 @MainActor
@@ -70,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.stop()
         // Give the IPC queue a moment to flush the clear-activity frame.
         Thread.sleep(forTimeInterval: 0.2)
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            URLCommands.handle(url, store: store, engine: engine) { id in WindowOpener.shared.open?(id) }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
