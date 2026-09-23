@@ -115,6 +115,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var showMusicProgress = true
     var showButtons = true
     var showSmallIcon = true
+    var codingLanguageIcons = true
     var readWindowTitlesWithAccessibility = false
 
     // Idle
@@ -156,6 +157,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         showMusicProgress = v(.showMusicProgress, d.showMusicProgress)
         showButtons = v(.showButtons, d.showButtons)
         showSmallIcon = v(.showSmallIcon, d.showSmallIcon)
+        codingLanguageIcons = v(.codingLanguageIcons, d.codingLanguageIcons)
         readWindowTitlesWithAccessibility = v(.readWindowTitlesWithAccessibility, d.readWindowTitlesWithAccessibility)
         idleEnabled = v(.idleEnabled, d.idleEnabled)
         idleMinutes = v(.idleMinutes, d.idleMinutes)
