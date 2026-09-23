@@ -5,10 +5,25 @@ struct ServicesPane: View {
     @Environment(SettingsStore.self) private var store
     @Environment(PresenceEngine.self) private var engine
     @ViewState private var steamKey = Keychain.get(SecretKey.steamAPI) ?? ""
+    @ViewState private var gridKey = Keychain.get(SecretKey.steamGridDB) ?? ""
 
     var body: some View {
         @Bindable var store = store
         Form {
+            Section {
+                SecureField("Clé API SteamGridDB", text: $gridKey)
+                    .onChange(of: gridKey) { _, key in
+                        Keychain.set(key.trimmingCharacters(in: .whitespaces), for: SecretKey.steamGridDB)
+                        engine.configureArtwork()
+                        engine.scheduleRecompute()
+                    }
+                Link("Obtenir une clé gratuite →", destination: URL(string: "https://www.steamgriddb.com/profile/preferences/api")!)
+            } header: {
+                Text("SteamGridDB")
+            } footer: {
+                Text("Jaquettes carrées créées par la communauté pour quasiment tous les jeux (Steam, Epic, GOG, cloud…). Prioritaires sur les autres visuels quand une clé est renseignée.")
+            }
+
             Section {
                 TextField("URL de base", text: $store.settings.iconHost)
                     .font(.caption.monospaced())

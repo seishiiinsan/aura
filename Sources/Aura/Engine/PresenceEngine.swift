@@ -205,6 +205,15 @@ final class PresenceEngine {
         }
     }
 
+    /// Pushes artwork-related settings and keys to the artwork service.
+    func configureArtwork() {
+        let host = store.settings.iconHost
+        let animated = store.settings.preferAnimatedArtwork
+        let gridKey = Keychain.get(SecretKey.steamGridDB)
+        Task { await ArtworkService.shared.setIconHost(host) }
+        Task { await ArtworkService.shared.configureSteamGridDB(key: gridKey, animated: animated) }
+    }
+
     func refreshSteam() async {
         let account = store.settings.steamAccount
         guard !account.isEmpty, let key = Keychain.get(SecretKey.steamAPI), !key.isEmpty else {
@@ -220,8 +229,7 @@ final class PresenceEngine {
 
     private func settingsChanged() {
         media.includeOtherPlayers = store.settings.musicOtherPlayers
-        let host = store.settings.iconHost
-        Task { await ArtworkService.shared.setIconHost(host) }
+        configureArtwork()
         // Rules may turn apps into games or hide them.
         games.invalidateAll()
         Task { await rescanGames() }
