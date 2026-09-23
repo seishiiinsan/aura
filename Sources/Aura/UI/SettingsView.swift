@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, discord, sources, display, rules, services, permissions, about
+    case general, discord, sources, display, profiles, rules, services, permissions, about
     var id: String { rawValue }
 
     var title: String {
@@ -10,6 +10,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .discord: "Discord"
         case .sources: "Sources"
         case .display: "Affichage"
+        case .profiles: "Profils"
         case .rules: "Règles par app"
         case .services: "Services"
         case .permissions: "Autorisations"
@@ -23,6 +24,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .discord: "bubble.left.and.bubble.right"
         case .sources: "square.stack.3d.up"
         case .display: "paintbrush"
+        case .profiles: "person.2.crop.square.stack"
         case .rules: "slider.horizontal.3"
         case .services: "network"
         case .permissions: "lock.shield"
@@ -48,6 +50,7 @@ struct SettingsView: View {
                 case .discord: DiscordPane()
                 case .sources: SourcesPane()
                 case .display: DisplayPane()
+                case .profiles: ProfilesPane()
                 case .rules: RulesPane()
                 case .services: ServicesPane()
                 case .permissions: PermissionsPane()
