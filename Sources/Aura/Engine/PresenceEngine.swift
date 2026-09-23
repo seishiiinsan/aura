@@ -61,6 +61,8 @@ final class PresenceEngine {
     @ObservationIgnored private var videoSessions: [String: Date] = [:]
     @ObservationIgnored private var wasIdle = false
     @ObservationIgnored private var tickCount = 0
+    /// Start of the last GeForce NOW session seen, to detect new ones.
+    @ObservationIgnored private var lastCloudSessionStart: Date?
 
     // Discord output state
     @ObservationIgnored private var desired: (clientID: String, presence: RichPresence?)?
@@ -161,6 +163,9 @@ final class PresenceEngine {
         if tickCount % 5 == 0 { Task { await rescanGames() } }
         if tickCount % 10 == 1 { Task { await refreshSteam() } }
         if tickCount % 2 == 0 { checkFocus() }
+        // GeForce NOW (and other launchers) publish their own, image-less Discord activity;
+        // Discord shows the most recent one, so Aura re-asserts its presence regularly while they run.
+        if tickCount % 40 == 0, snapshot?.kind == .game, runningGames.contains(where: \.isCloud) { reassertPresence() }
         if tickCount % 1200 == 3, store.settings.autoCheckUpdates { Updater.shared.checkIfDue() }
         refreshPermissions()
         if let app = frontApp { touchFocusSession(for: app) }
@@ -429,6 +434,10 @@ final class PresenceEngine {
                 // Most reliable: GeForce NOW's own session log (no permission needed).
                 game.name = session.game
                 cloudStart = session.start
+                if session.start != lastCloudSessionStart {
+                    lastCloudSessionStart = session.start
+                    competingPresenceStarted()
+                }
             } else if let title = WindowInspector.focusedWindow(pid: game.pid)?.title,
                       let name = GameDetector.cloudGameName(fromTitle: title, platform: game.platform ?? "") {
                 // Fallback: the streaming window's title (needs Accessibility).
@@ -853,6 +862,23 @@ final class PresenceEngine {
             }
             return
         }
+        flush()
+    }
+
+    /// A launcher just published its own activity: send ours again right after it, so Discord shows Aura's.
+    private func competingPresenceStarted() {
+        for delay in [6.0, 20.0, 45.0] {
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                self?.reassertPresence()
+            }
+        }
+    }
+
+    /// Re-sends the current activity even if unchanged, making it Discord's most recent one.
+    func reassertPresence() {
+        guard let desired, desired.presence != nil, case .connected = status, ipc.clientID == desired.clientID else { return }
+        sent = (desired.clientID, nil)
         flush()
     }
 
