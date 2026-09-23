@@ -293,6 +293,34 @@ final class PresenceEngine {
         }
     }
 
+    /// Sends a rule to Discord for a few seconds, on top of the app's current (or a generic) presence.
+    func preview(_ rule: AppRule, seconds: TimeInterval = 10) {
+        let t = PresenceStrings(lang: store.settings.language)
+        var p: RichPresence
+        if let snap = snapshot, snap.sourceBundleID == rule.bundleID {
+            p = snap.presence
+        } else {
+            p = RichPresence(type: .playing)
+            p.statusDisplay = .details
+            p.details = t.using(rule.appName)
+            p.largeText = rule.appName
+            p.start = Date()
+        }
+        var client = clientID("", store.settings)
+        var preview = rule
+        preview.mode = .customize
+        apply(preview, to: &p, clientID: &client, vars: ["app": rule.appName, "title": rule.appName])
+        setCustomPresence(p, until: Date().addingTimeInterval(seconds))
+        previewEndsAt = Date().addingTimeInterval(seconds)
+        Task {
+            try? await Task.sleep(for: .seconds(seconds + 0.2))
+            self.previewEndsAt = nil
+            self.scheduleRecompute()
+        }
+    }
+
+    private(set) var previewEndsAt: Date?
+
     func setCustomPresence(_ presence: RichPresence?, until: Date?) {
         if let presence, let until { customPresence = (presence, until) } else { customPresence = nil }
         scheduleRecompute()
