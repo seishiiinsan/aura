@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+      - name: Build app bundles
+        run: scripts/build-app.sh
+
+      - name: Package
+        run: scripts/package-release.sh
+
+      - name: Upload apps
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aura-${{ github.sha }}
+          path: |
+            build/Aura.zip
+            build/Aura.dmg
+          retention-days: 14
