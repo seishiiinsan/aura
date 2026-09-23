@@ -286,6 +286,13 @@ struct SourcesPane: View {
 
             Section("App au premier plan") {
                 Toggle("Afficher les noms de fichiers et de projets", isOn: $store.settings.showWindowTitles)
+                Toggle("Branche git du projet ouvert", isOn: $store.settings.showGitBranch)
+                Toggle("Bouton « Voir sur GitHub » (dépôts GitHub uniquement)", isOn: $store.settings.showRepoButton)
+                TextField("Dossiers de projets (séparés par des virgules)", text: Binding(
+                    get: { store.settings.projectRoots.joined(separator: ", ") },
+                    set: { store.settings.projectRoots = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+                ))
+                .font(.caption)
                 Toggle("Lire les titres de fenêtres (Accessibilité)", isOn: $store.settings.readWindowTitlesWithAccessibility)
                     .onChange(of: store.settings.readWindowTitlesWithAccessibility) { _, on in
                         if on && !WindowInspector.isTrusted { WindowInspector.requestAccess() }

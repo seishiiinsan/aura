@@ -573,6 +573,20 @@ final class PresenceEngine {
             p.state = project.map(t.project) ?? (file != nil ? t.workspace(name) : nil)
             vars["file"] = file ?? ""
             vars["project"] = project ?? ""
+            if s.showGitBranch || s.showRepoButton {
+                let repo = focused?.documentPath.flatMap(GitInspector.repository(containing:))
+                    ?? project.flatMap { GitInspector.repository(named: $0, roots: s.projectRoots) }
+                if let repo, let git = GitInspector.info(repo: repo) {
+                    vars["branch"] = git.branch
+                    if project == nil { project = repo.lastPathComponent }
+                    if s.showGitBranch {
+                        p.state = "\(project.map(t.project) ?? t.workspace(name)) · \(git.branch)"
+                    }
+                    if s.showRepoButton, s.showButtons, let gh = git.githubRepo {
+                        p.buttons = [PresenceButton(label: t.viewOnGitHub(), url: "https://github.com/\(gh)")]
+                    }
+                }
+            }
             if s.codingLanguageIcons, let file, let language = Languages.language(forFile: file) {
                 // vscord style: language as the big picture, editor as the badge.
                 p.largeImage = language.iconURL

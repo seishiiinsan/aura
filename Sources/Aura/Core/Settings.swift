@@ -116,6 +116,9 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var showButtons = true
     var showSmallIcon = true
     var codingLanguageIcons = true
+    var showGitBranch = true
+    var showRepoButton = false
+    var projectRoots: [String] = GitInspector.defaultRoots
     var readWindowTitlesWithAccessibility = false
 
     // Idle
@@ -158,6 +161,9 @@ struct AuraSettings: Codable, Equatable, Sendable {
         showButtons = v(.showButtons, d.showButtons)
         showSmallIcon = v(.showSmallIcon, d.showSmallIcon)
         codingLanguageIcons = v(.codingLanguageIcons, d.codingLanguageIcons)
+        showGitBranch = v(.showGitBranch, d.showGitBranch)
+        showRepoButton = v(.showRepoButton, d.showRepoButton)
+        projectRoots = v(.projectRoots, d.projectRoots)
         readWindowTitlesWithAccessibility = v(.readWindowTitlesWithAccessibility, d.readWindowTitlesWithAccessibility)
         idleEnabled = v(.idleEnabled, d.idleEnabled)
         idleMinutes = v(.idleMinutes, d.idleMinutes)
