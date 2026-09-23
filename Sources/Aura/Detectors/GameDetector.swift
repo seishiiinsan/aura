@@ -37,6 +37,14 @@ actor DetectableGames {
     private let log = Logger(subsystem: "app.aura", category: "games")
     private var byName: [String: Entry] = [:]
     private var byDarwinExecutable: [String: Entry] = [:]
+    private var byWindowsExecutable: [String: [(path: String, entry: Entry)]] = [:]
+
+    /// Executable names too generic to identify a game on their own.
+    private static let genericExecutables: Set<String> = [
+        "launcher.exe", "game.exe", "start.exe", "setup.exe", "play.exe", "client.exe", "main.exe", "app.exe",
+        "unitycrashhandler64.exe", "unitycrashhandler32.exe", "crashreporter.exe", "java.exe", "javaw.exe",
+        "python.exe", "steam.exe", "explorer.exe", "winedevice.exe", "services.exe", "rundll32.exe",
+    ]
     private var loadTask: Task<Void, Never>?
     private(set) var count = 0
 
@@ -75,8 +83,15 @@ actor DetectableGames {
                 if let existing = byName[k], existing.icon_hash != nil { continue }
                 byName[k] = e
             }
-            for exe in e.executables ?? [] where exe.os == "darwin" {
-                byDarwinExecutable[exe.name.lowercased()] = e
+            for exe in e.executables ?? [] {
+                if exe.os == "darwin" {
+                    byDarwinExecutable[exe.name.lowercased()] = e
+                } else if exe.os == "win32" {
+                    let path = exe.name.lowercased().replacingOccurrences(of: "\\", with: "/")
+                    let base = (path as NSString).lastPathComponent
+                    guard base.hasSuffix(".exe"), !Self.genericExecutables.contains(base) || path.contains("/") else { continue }
+                    byWindowsExecutable[base, default: []].append((path, e))
+                }
             }
         }
         count = entries.count
@@ -102,6 +117,16 @@ actor DetectableGames {
     }
 
     func match(name: String) -> Entry? { byName[Self.normalize(name)] }
+
+    /// Matches a Windows executable path (as seen in a Wine process' argv).
+    func match(windowsPath raw: String) -> Entry? {
+        let path = raw.lowercased().replacingOccurrences(of: "\\", with: "/")
+        let base = (path as NSString).lastPathComponent
+        guard let candidates = byWindowsExecutable[base] else { return nil }
+        // Prefer entries whose relative path ("_retail_/wow.exe") matches the end of the full path.
+        if let exact = candidates.first(where: { $0.path.contains("/") && path.hasSuffix($0.path) }) { return exact.entry }
+        return candidates.first(where: { !$0.path.contains("/") })?.entry
+    }
 }
 
 /// Decides whether a running application is a game and gathers metadata about it.
@@ -203,6 +228,26 @@ final class GameDetector {
             return (name, "GeForce NOW")
         }
         return nil
+    }
+
+    /// Windows games running through Wine, CrossOver or Whisky.
+    func scanWineGames() async -> [DetectedGame] {
+        await DetectableGames.shared.load()
+        let processes = await Task.detached(priority: .utility) { ProcessScanner.allProcesses() }.value
+        var games: [DetectedGame] = []
+        var seen = Set<String>()
+        for proc in processes {
+            let exe = proc.executablePath.lowercased()
+            guard exe.contains("wine") || exe.contains("crossover") || exe.contains("whisky") || exe.contains("gptk") else { continue }
+            guard let winPath = proc.arguments.first(where: { $0.lowercased().hasSuffix(".exe") }),
+                  let entry = await DetectableGames.shared.match(windowsPath: winPath),
+                  seen.insert(entry.id).inserted else { continue }
+            let platform = exe.contains("crossover") ? "CrossOver" : exe.contains("whisky") ? "Whisky" : "Wine"
+            games.append(DetectedGame(name: entry.name, bundleID: nil, bundlePath: winPath, pid: proc.pid,
+                                      launchDate: proc.startDate, discordAppID: entry.id,
+                                      discordIconURL: entry.iconURL, platform: platform))
+        }
+        return games
     }
 
     /// Resolves `…/steamapps/common/<installdir>/…` to the Steam app id and name.
