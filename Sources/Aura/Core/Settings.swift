@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 import OSLog
@@ -74,6 +75,35 @@ enum ActivityTypeOverride: String, Codable, CaseIterable, Identifiable, Sendable
     }
 }
 
+/// When a rule applies. Empty conditions always match.
+struct RuleConditions: Codable, Hashable, Sendable {
+    var useHours = false
+    /// Minutes since midnight; a range crossing midnight (22:00 → 02:00) is supported.
+    var fromMinute = 9 * 60
+    var toMinute = 18 * 60
+    /// Calendar weekdays (1 = Sunday … 7 = Saturday); empty = every day.
+    var weekdays: Set<Int> = []
+    /// Case-insensitive text the focused window title must contain.
+    var titleContains = ""
+    var requiresExternalDisplay = false
+
+    var isEmpty: Bool { !useHours && weekdays.isEmpty && titleContains.isEmpty && !requiresExternalDisplay }
+
+    func matches(date: Date = Date(), title: String?, externalDisplay: Bool) -> Bool {
+        let cal = Calendar.current
+        if !weekdays.isEmpty, !weekdays.contains(cal.component(.weekday, from: date)) { return false }
+        if useHours {
+            let c = cal.dateComponents([.hour, .minute], from: date)
+            let now = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            let inRange = fromMinute <= toMinute ? (now >= fromMinute && now < toMinute) : (now >= fromMinute || now < toMinute)
+            if !inRange { return false }
+        }
+        if !titleContains.isEmpty, !(title ?? "").localizedCaseInsensitiveContains(titleContains) { return false }
+        if requiresExternalDisplay, !externalDisplay { return false }
+        return true
+    }
+}
+
 /// A per-application override created by the user.
 struct AppRule: Codable, Identifiable, Hashable, Sendable {
     var id = UUID()
@@ -88,6 +118,31 @@ struct AppRule: Codable, Identifiable, Hashable, Sendable {
     var activityType: ActivityTypeOverride = .auto
     var buttonLabel: String = ""
     var buttonURL: String = ""
+    var conditions = RuleConditions()
+
+    init(bundleID: String, appName: String) {
+        self.bundleID = bundleID
+        self.appName = appName
+    }
+
+    // Tolerant decoding so rules saved by older versions keep loading.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bundleID = try c.decode(String.self, forKey: .bundleID)
+        appName = try c.decode(String.self, forKey: .appName)
+        func v<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T { (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback }
+        id = v(.id, UUID())
+        mode = v(.mode, .customize)
+        details = v(.details, "")
+        state = v(.state, "")
+        largeImageURL = v(.largeImageURL, "")
+        largeText = v(.largeText, "")
+        clientID = v(.clientID, "")
+        activityType = v(.activityType, .auto)
+        buttonLabel = v(.buttonLabel, "")
+        buttonURL = v(.buttonURL, "")
+        conditions = v(.conditions, RuleConditions())
+    }
 }
 
 struct AuraSettings: Codable, Equatable, Sendable {
@@ -187,9 +242,11 @@ struct AuraSettings: Codable, Equatable, Sendable {
         activeProfileID = v(.activeProfileID, d.activeProfileID)
     }
 
-    func rule(for bundleID: String?) -> AppRule? {
+    /// First rule of the app whose conditions match (rules are evaluated in list order).
+    func rule(for bundleID: String?, title: String? = nil, date: Date = Date()) -> AppRule? {
         guard let bundleID else { return nil }
-        return rules.first { $0.bundleID == bundleID }
+        let external = RuleContext.hasExternalDisplay
+        return rules.first { $0.bundleID == bundleID && $0.conditions.matches(date: date, title: title, externalDisplay: external) }
     }
 
     func isEnabled(_ kind: SourceKind) -> Bool { !disabledSources.contains(kind) }
@@ -253,5 +310,16 @@ final class SettingsStore {
         } else {
             settings.rules.append(rule)
         }
+    }
+}
+
+enum RuleContext {
+    /// True when a display other than the built-in one is connected.
+    static var hasExternalDisplay: Bool {
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &displays, &count)
+        return displays.contains { CGDisplayIsBuiltin($0) == 0 }
     }
 }

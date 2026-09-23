@@ -476,7 +476,7 @@ final class PresenceEngine {
 
     private func videoDraft(_ s: AuraSettings, _ t: PresenceStrings) async -> PresenceSnapshot? {
         guard let app = frontApp, let bundleID = app.bundleIdentifier else { return nil }
-        let rule = s.rule(for: bundleID)
+        let rule = s.rule(for: bundleID, title: focused?.title ?? browserTab?.title)
         if rule?.mode == .hide { return nil }
         let appName = app.localizedName ?? bundleID
         var p = RichPresence(type: .watching)
@@ -588,7 +588,7 @@ final class PresenceEngine {
         guard let app = frontApp else { return nil }
         let bundleID = app.bundleIdentifier
         if let bundleID, AppCatalog.ignored.contains(bundleID) { return nil }
-        let rule = s.rule(for: bundleID)
+        let rule = s.rule(for: bundleID, title: focused?.title ?? browserTab?.title)
         if rule?.mode == .hide { return nil }
         let name = app.localizedName ?? bundleID ?? "App"
         let category = AppCatalog.category(for: bundleID)

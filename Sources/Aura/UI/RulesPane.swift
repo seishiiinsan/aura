@@ -14,12 +14,14 @@ struct RulesPane: View {
                             AppIconView(bundleID: rule.bundleID).frame(width: 20, height: 20)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(rule.appName).lineLimit(1)
-                                Text(rule.mode.title).font(.caption).foregroundStyle(.secondary)
+                                Text(rule.mode.title + (rule.conditions.isEmpty ? "" : " · sous conditions"))
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .tag(rule.id)
                     }
                     .onDelete { store.settings.rules.remove(atOffsets: $0) }
+                    .onMove { store.settings.rules.move(fromOffsets: $0, toOffset: $1) }
                 }
                 .overlay {
                     if store.settings.rules.isEmpty {
@@ -83,10 +85,7 @@ struct RulesPane: View {
     }
 
     private func add(bundleID: String, name: String) {
-        if let existing = store.settings.rules.first(where: { $0.bundleID == bundleID }) {
-            selection = existing.id
-            return
-        }
+        // Several rules per app are allowed (with different conditions); the first match wins.
         let rule = AppRule(bundleID: bundleID, appName: name)
         store.settings.rules.append(rule)
         selection = rule.id
@@ -121,6 +120,8 @@ struct RuleEditor: View {
                 }
                 .pickerStyle(.segmented)
             }
+
+            ConditionsEditor(conditions: $rule.conditions)
 
             if rule.mode != .hide {
                 Section {
@@ -178,5 +179,51 @@ struct AppIconView: View {
         } else {
             Image(systemName: "app.dashed").resizable().scaledToFit().foregroundStyle(.secondary)
         }
+    }
+}
+
+struct ConditionsEditor: View {
+    @Binding var conditions: RuleConditions
+
+    private static let days: [(Int, String)] = [(2, "L"), (3, "M"), (4, "M"), (5, "J"), (6, "V"), (7, "S"), (1, "D")]
+
+    var body: some View {
+        Section {
+            Toggle("Seulement entre certaines heures", isOn: $conditions.useHours)
+            if conditions.useHours {
+                HStack {
+                    DatePicker("De", selection: minuteBinding(\.fromMinute), displayedComponents: .hourAndMinute)
+                    DatePicker("à", selection: minuteBinding(\.toMinute), displayedComponents: .hourAndMinute)
+                }
+            }
+            HStack(spacing: 6) {
+                Text("Jours")
+                Spacer()
+                ForEach(Self.days, id: \.0) { day, label in
+                    let on = conditions.weekdays.contains(day)
+                    Button(label) {
+                        if on { conditions.weekdays.remove(day) } else { conditions.weekdays.insert(day) }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(on ? .accentColor : .secondary)
+                }
+            }
+            TextField("Le titre de la fenêtre contient…", text: $conditions.titleContains)
+            Toggle("Seulement avec un écran externe branché", isOn: $conditions.requiresExternalDisplay)
+        } header: {
+            Text("Conditions")
+        } footer: {
+            Text("Aucun jour sélectionné = tous les jours. Plusieurs règles pour une même app sont évaluées dans l'ordre de la liste (glisse pour réordonner).")
+        }
+    }
+
+    private func minuteBinding(_ key: WritableKeyPath<RuleConditions, Int>) -> Binding<Date> {
+        Binding(
+            get: { Calendar.current.startOfDay(for: Date()).addingTimeInterval(TimeInterval(conditions[keyPath: key] * 60)) },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                conditions[keyPath: key] = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            }
+        )
     }
 }
