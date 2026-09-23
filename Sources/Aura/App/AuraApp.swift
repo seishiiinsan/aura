@@ -20,13 +20,35 @@ struct AuraApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("Réglages d'Aura", id: "settings") {
-            SettingsView()
+        Window("Aura", id: "main") {
+            MainView()
                 .environment(delegate.engine)
                 .environment(delegate.store)
         }
         .windowResizability(.contentMinSize)
+        .defaultSize(width: 980, height: 680)
         .defaultLaunchBehavior(delegate.needsOnboarding ? .presented : .suppressed)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Réglages…") {
+                    MainNavigation.shared.pane = .general
+                    WindowOpener.shared.open?("main")
+                }
+                .keyboardShortcut(",")
+            }
+            CommandMenu("Présence") {
+                Button(delegate.store.settings.paused ? "Reprendre la diffusion" : "Mettre en pause") {
+                    delegate.store.settings.paused.toggle()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button("Profil suivant") { delegate.store.cycleProfile() }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Reconnecter à Discord") { delegate.engine.reconnect() }
+                Divider()
+                Button("Ouvrir Aura Insights") { InsightsLauncher.open() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+            }
+        }
     }
 }
 
@@ -121,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        true
+        if !flag { WindowOpener.shared.open?("main") }
+        return true
     }
 }

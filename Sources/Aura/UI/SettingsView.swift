@@ -1,11 +1,12 @@
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, discord, sources, display, profiles, rules, services, permissions, about
+    case home, general, discord, sources, display, profiles, rules, services, permissions, about
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .home: "Maintenant"
         case .general: "Général"
         case .discord: "Discord"
         case .sources: "Sources"
@@ -20,6 +21,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .home: "sparkles"
         case .general: "gearshape"
         case .discord: "bubble.left.and.bubble.right"
         case .sources: "square.stack.3d.up"
@@ -33,19 +35,46 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     }
 }
 
-struct SettingsView: View {
+/// Which pane the main window shows; shared so menus, URLs and hotkeys can deep-link.
+@MainActor
+@Observable
+final class MainNavigation {
+    static let shared = MainNavigation()
+    var pane: SettingsPane? = .home
+}
+
+/// Aura's main window: a live dashboard plus every setting, in a regular app window.
+struct MainView: View {
     @Environment(SettingsStore.self) private var store
-    @ViewState private var pane: SettingsPane? = .general
+    @Bindable private var nav = MainNavigation.shared
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: $pane) { p in
-                Label(p.title, systemImage: p.symbol).tag(p)
+            List(selection: $nav.pane) {
+                Section("Aura") {
+                    Label(SettingsPane.home.title, systemImage: SettingsPane.home.symbol).tag(SettingsPane.home)
+                }
+                Section("Réglages") {
+                    ForEach(SettingsPane.allCases.filter { $0 != .home }) { p in
+                        Label(p.title, systemImage: p.symbol).tag(p)
+                    }
+                }
             }
-            .navigationSplitViewColumnWidth(190)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    InsightsLauncher.open()
+                } label: {
+                    Label("Ouvrir Aura Insights", systemImage: "chart.bar.xaxis")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(10)
+            }
         } detail: {
             Group {
-                switch pane ?? .general {
+                switch nav.pane ?? .home {
+                case .home: HomePane()
                 case .general: GeneralPane()
                 case .discord: DiscordPane()
                 case .sources: SourcesPane()
@@ -58,12 +87,31 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle((pane ?? .general).title)
+            .navigationTitle((nav.pane ?? .home).title)
         }
-        .frame(minWidth: 760, minHeight: 540)
+        .frame(minWidth: 820, minHeight: 560)
         .onAppear {
-            if store.settings.clientID.isEmpty { pane = .discord }
+            if store.settings.clientID.isEmpty { nav.pane = .discord }
+            DockPresence.windowDidOpen()
         }
+        .onDisappear { DockPresence.windowDidClose() }
+    }
+}
+
+/// Shows Aura in the Dock (and app switcher) only while its window is open.
+@MainActor
+enum DockPresence {
+    private static var openCount = 0
+
+    static func windowDidOpen() {
+        openCount += 1
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate()
+    }
+
+    static func windowDidClose() {
+        openCount = max(0, openCount - 1)
+        if openCount == 0 { NSApp.setActivationPolicy(.accessory) }
     }
 }
 
