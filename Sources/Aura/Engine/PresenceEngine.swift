@@ -51,6 +51,7 @@ final class PresenceEngine {
     @ObservationIgnored private var focusSessions: [String: (start: Date, lastSeen: Date)] = [:]
     @ObservationIgnored private var videoSessions: [String: Date] = [:]
     @ObservationIgnored private var wasIdle = false
+    @ObservationIgnored private var tickCount = 0
 
     // Discord output state
     @ObservationIgnored private var desired: (clientID: String, presence: RichPresence?)?
@@ -141,6 +142,9 @@ final class PresenceEngine {
     }
 
     private func tick() {
+        tickCount += 1
+        // Wine games don't post NSWorkspace launch notifications: rescan every 15 s.
+        if tickCount % 5 == 0 { Task { await rescanGames() } }
         refreshPermissions()
         if let app = frontApp { touchFocusSession(for: app) }
         let idle = isIdle
@@ -180,6 +184,9 @@ final class PresenceEngine {
             let rule = settings.rule(for: app.bundleIdentifier)
             if rule?.mode == .hide { continue }
             if let game = await games.detect(app, forced: rule?.mode == .game) { found.append(game) }
+        }
+        for game in await games.scanWineGames() where !found.contains(where: { $0.discordAppID == game.discordAppID }) {
+            found.append(game)
         }
         found.sort { ($0.launchDate ?? .distantPast) > ($1.launchDate ?? .distantPast) }
         if found != runningGames {
