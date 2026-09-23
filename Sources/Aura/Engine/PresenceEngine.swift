@@ -36,6 +36,8 @@ final class PresenceEngine {
     private(set) var runningGames: [DetectedGame] = []
     private(set) var lastSentAt: Date?
     private(set) var steamStatus: SteamStatus?
+    private(set) var activeFocus: String?
+    @ObservationIgnored private var focusChecked = false
     /// Temporary presence set from a Shortcut / URL / rule preview; wins over every source.
     private(set) var customPresence: (presence: RichPresence, until: Date)?
 
@@ -152,6 +154,7 @@ final class PresenceEngine {
         // Wine games don't post NSWorkspace launch notifications: rescan every 15 s.
         if tickCount % 5 == 0 { Task { await rescanGames() } }
         if tickCount % 10 == 1 { Task { await refreshSteam() } }
+        if tickCount % 2 == 0 { checkFocus() }
         refreshPermissions()
         if let app = frontApp { touchFocusSession(for: app) }
         let idle = isIdle
@@ -215,6 +218,21 @@ final class PresenceEngine {
         let gridKey = Keychain.get(SecretKey.steamGridDB)
         Task { await ArtworkService.shared.setIconHost(host) }
         Task { await ArtworkService.shared.configureSteamGridDB(key: gridKey, animated: animated) }
+    }
+
+    /// Switches profile when the macOS Focus changes (needs Full Disk Access).
+    private func checkFocus() {
+        let s = store.settings
+        guard !s.focusProfiles.isEmpty || !s.noFocusProfile.isEmpty else { return }
+        let focus = FocusMonitor.activeFocusName()
+        guard focus != activeFocus || !focusChecked else { return }
+        focusChecked = true
+        activeFocus = focus
+        if let focus, let profile = s.focusProfiles[focus] {
+            store.activateProfile(named: profile)
+        } else if focus == nil, !s.noFocusProfile.isEmpty {
+            store.activateProfile(named: s.noFocusProfile)
+        }
     }
 
     func refreshSteam() async {
