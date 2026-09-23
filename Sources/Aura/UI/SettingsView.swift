@@ -275,6 +275,11 @@ struct SourcesPane: View {
 
             Section("Vidéos & navigateurs") {
                 Toggle("Afficher le titre des pages web", isOn: $store.settings.showBrowserPageTitles)
+                Toggle("Détails des films et séries (titre, épisode, affiche, progression)", isOn: $store.settings.readStreamingDetails)
+                if store.settings.readStreamingDetails {
+                    Text("Active « Autoriser JavaScript depuis les Apple Events » : Chrome/Arc/Brave → menu Affichage › Options pour les développeurs ; Safari → Réglages › Avancés › « Afficher les fonctionnalités pour les développeurs », puis menu Développement.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 Text("YouTube (miniature + chaîne), Twitch (avatar du streamer), Netflix, Prime Video, Disney+, Crunchyroll, GitHub… dans Safari, Chrome, Arc, Brave, Edge, Vivaldi, Opera.")
                     .font(.caption).foregroundStyle(.secondary)
             }

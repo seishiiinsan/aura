@@ -49,6 +49,7 @@ final class PresenceEngine {
     @ObservationIgnored private var frontApp: NSRunningApplication?
     @ObservationIgnored private var focused: WindowInspector.Focused?
     @ObservationIgnored private var browserTab: BrowserInspector.Tab?
+    @ObservationIgnored private var pageMedia: BrowserInspector.PageMedia?
     @ObservationIgnored private var focusSessions: [String: (start: Date, lastSeen: Date)] = [:]
     @ObservationIgnored private var videoSessions: [String: Date] = [:]
     @ObservationIgnored private var wasIdle = false
@@ -126,6 +127,7 @@ final class PresenceEngine {
         frontApp = app
         focused = nil
         browserTab = nil
+        pageMedia = nil
         touchFocusSession(for: app)
         Task { await pollContext() }
         scheduleRecompute()
@@ -174,6 +176,12 @@ final class PresenceEngine {
         }
         if BrowserInspector.supports(bundleID), settings.isEnabled(.video) || settings.isEnabled(.app) {
             browserTab = await BrowserInspector.activeTab(bundleID: bundleID, appName: app.localizedName ?? bundleID)
+            if settings.readStreamingDetails, let tab = browserTab, let site = SiteCatalog.analyze(tab.url),
+               case .streaming = site.kind {
+                pageMedia = await BrowserInspector.pageMedia(bundleID: bundleID, appName: app.localizedName ?? bundleID)
+            } else {
+                pageMedia = nil
+            }
         } else if bundleID == "org.mozilla.firefox" || bundleID == "app.zen-browser.zen" {
             browserTab = nil // No AppleScript support; window title only.
         }
@@ -486,14 +494,34 @@ final class PresenceEngine {
                 if s.showButtons { p.buttons = [PresenceButton(label: t.watchOnTwitch(), url: "https://www.twitch.tv/\(channel)")] }
                 if s.showElapsedTime { p.start = videoStart("tw:" + channel) }
             case .streaming(let service):
-                p.details = t.watchingOn(service)
-                if s.showBrowserPageTitles {
-                    let title = tab.title.components(separatedBy: " | ").first ?? tab.title
-                    if title.caseInsensitiveCompare(service) != .orderedSame { p.state = title }
+                if let media = pageMedia, let title = media.title {
+                    // Title, episode, poster and progress read from the player.
+                    p.details = title
+                    p.state = media.subtitle ?? t.watchingOn(service)
+                    p.largeImage = media.artwork ?? AppCatalog.faviconURL(domain: site.host)
+                    p.largeText = media.subtitle.map { "\(title) · \($0)" } ?? title
+                    if s.showSmallIcon {
+                        p.smallImage = AppCatalog.faviconURL(domain: site.host)
+                        p.smallText = media.paused == true ? "\(service) — \(t.paused())" : service
+                    }
+                    if media.paused != true, let cur = media.currentTime, let dur = media.duration, dur > 0 {
+                        let start = Date().addingTimeInterval(-cur)
+                        p.start = start
+                        p.end = start.addingTimeInterval(dur)
+                    } else if s.showElapsedTime {
+                        p.start = videoStart("st:" + service)
+                    }
+                    vars["title"] = title
+                } else {
+                    p.details = t.watchingOn(service)
+                    if s.showBrowserPageTitles {
+                        let title = tab.title.components(separatedBy: " | ").first ?? tab.title
+                        if title.caseInsensitiveCompare(service) != .orderedSame { p.state = title }
+                    }
+                    p.largeImage = AppCatalog.faviconURL(domain: site.host)
+                    p.largeText = service
+                    if s.showElapsedTime { p.start = videoStart("st:" + service) }
                 }
-                p.largeImage = AppCatalog.faviconURL(domain: site.host)
-                p.largeText = service
-                if s.showElapsedTime { p.start = videoStart("st:" + service) }
             case .github, .generic:
                 return nil
             }

@@ -105,6 +105,52 @@ enum BrowserInspector {
         }
     }
 
+    /// What the page's media player exposes (needs "Allow JavaScript from Apple Events" in the browser).
+    struct PageMedia: Equatable, Sendable {
+        var title: String?
+        var subtitle: String?
+        var artwork: String?
+        var paused: Bool?
+        var currentTime: Double?
+        var duration: Double?
+    }
+
+    private static let mediaJS = #"(function(){var m=navigator.mediaSession&&navigator.mediaSession.metadata;var v=document.querySelector('video');function q(s){var e=document.querySelector(s);return e?e.innerText:''}var art='';if(m&&m.artwork&&m.artwork.length){art=m.artwork[m.artwork.length-1].src}return JSON.stringify({t:m?m.title:'',a:m?(m.artist||m.album):'',art:art,nf:q('[data-uia="video-title"]'),pt:q('.atvwebplayersdk-title-text'),ps:q('.atvwebplayersdk-subtitle-text'),dt:q('.title-field'),ds:q('.subtitle-field'),paused:v?v.paused:null,cur:v?v.currentTime:null,dur:v?v.duration:null})})()"#
+
+    static func pageMedia(bundleID: String, appName: String) async -> PageMedia? {
+        let js = mediaJS.replacingOccurrences(of: "\"", with: "\\\"")
+        let script: String
+        if safari.contains(bundleID) {
+            script = "tell application id \"\(bundleID)\" to do JavaScript \"\(js)\" in current tab of front window"
+        } else if chromium.contains(bundleID) {
+            script = "tell application id \"\(bundleID)\" to execute active tab of front window javascript \"\(js)\""
+        } else {
+            return nil
+        }
+        guard let raw = await AppleScriptRunner.shared.run(script, app: appName)?.first,
+              let data = raw.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        func str(_ k: String) -> String? {
+            (obj[k] as? String).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        }
+        var media = PageMedia(paused: obj["paused"] as? Bool, currentTime: obj["cur"] as? Double, duration: obj["dur"] as? Double)
+        if let nf = str("nf") {
+            // Netflix: "Show\nS1:E3\nEpisode"
+            let lines = nf.components(separatedBy: "\n").filter { !$0.isEmpty }
+            media.title = lines.first
+            media.subtitle = lines.dropFirst().joined(separator: " · ").nilIfEmpty
+        } else if let pt = str("pt") {
+            media.title = pt; media.subtitle = str("ps")
+        } else if let dt = str("dt") {
+            media.title = dt; media.subtitle = str("ds")
+        } else {
+            media.title = str("t"); media.subtitle = str("a")
+        }
+        media.artwork = str("art").flatMap { $0.hasPrefix("https://") ? $0 : nil }
+        if let d = media.duration, !d.isFinite { media.duration = nil }
+        return media.title == nil ? nil : media
+    }
+
     static func activeTab(bundleID: String, appName: String) async -> Tab? {
         let script: String
         if safari.contains(bundleID) {
@@ -135,4 +181,8 @@ enum IdleMonitor {
         guard let anyEvent = CGEventType(rawValue: ~0) else { return 0 }
         return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyEvent)
     }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
