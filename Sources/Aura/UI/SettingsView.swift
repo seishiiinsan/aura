@@ -1,3 +1,4 @@
+import AuraKit
 import SwiftUI
 
 enum SettingsPane: String, CaseIterable, Identifiable {
@@ -14,7 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .profiles: "Profils"
         case .rules: "Règles par app"
         case .services: "Services"
-        case .permissions: "Autorisations"
+        case .permissions: "Confidentialité"
         case .about: "À propos"
         }
     }
@@ -22,15 +23,46 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .home: "sparkles"
-        case .general: "gearshape"
-        case .discord: "bubble.left.and.bubble.right"
-        case .sources: "square.stack.3d.up"
-        case .display: "paintbrush"
-        case .profiles: "person.2.crop.square.stack"
+        case .general: "gearshape.fill"
+        case .discord: "bubble.left.and.bubble.right.fill"
+        case .sources: "square.stack.3d.up.fill"
+        case .display: "paintbrush.pointed.fill"
+        case .profiles: "person.2.fill"
         case .rules: "slider.horizontal.3"
         case .services: "network"
-        case .permissions: "lock.shield"
-        case .about: "info.circle"
+        case .permissions: "hand.raised.fill"
+        case .about: "info"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .home: .purple
+        case .general: .gray
+        case .discord: .indigo
+        case .sources: .blue
+        case .display: .pink
+        case .profiles: .orange
+        case .rules: .teal
+        case .services: .green
+        case .permissions: .blue
+        case .about: .gray
+        }
+    }
+
+    /// Words searched by the sidebar filter.
+    var keywords: String {
+        switch self {
+        case .home: "maintenant accueil direct aujourd'hui"
+        case .general: "démarrage ouverture session pause raccourcis historique langue inactivité absent"
+        case .discord: "application id client connexion identité jeux"
+        case .sources: "priorité jeux musique vidéos navigateur spotify youtube git fichiers"
+        case .display: "affichage temps boutons icône langage animé gif"
+        case .profiles: "profils concentration focus discret streaming travail"
+        case .rules: "règles app personnaliser masquer conditions"
+        case .services: "steam steamgriddb icônes clé api"
+        case .permissions: "autorisations accessibilité automatisation confidentialité"
+        case .about: "version mise à jour github"
         }
     }
 }
@@ -43,34 +75,53 @@ final class MainNavigation {
     var pane: SettingsPane? = .home
 }
 
-/// Aura's main window: a live dashboard plus every setting, in a regular app window.
+/// Aura's main window: a live dashboard plus every setting, System Settings–style.
 struct MainView: View {
     @Environment(SettingsStore.self) private var store
+    @Environment(PresenceEngine.self) private var engine
     @Bindable private var nav = MainNavigation.shared
+    @ViewState private var search = ""
+
+    private var visiblePanes: [SettingsPane] {
+        let q = search.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return SettingsPane.allCases }
+        return SettingsPane.allCases.filter {
+            $0.title.localizedCaseInsensitiveContains(q) || $0.keywords.localizedCaseInsensitiveContains(q)
+        }
+    }
 
     var body: some View {
         NavigationSplitView {
             List(selection: $nav.pane) {
-                Section("Aura") {
-                    Label(SettingsPane.home.title, systemImage: SettingsPane.home.symbol).tag(SettingsPane.home)
+                if visiblePanes.contains(.home) {
+                    Section { row(.home) }
                 }
-                Section("Réglages") {
-                    ForEach(SettingsPane.allCases.filter { $0 != .home }) { p in
-                        Label(p.title, systemImage: p.symbol).tag(p)
+                Section {
+                    ForEach(visiblePanes.filter { $0 != .home && $0 != .about }) { row($0) }
+                }
+                if visiblePanes.contains(.about) {
+                    Section { row(.about) }
+                }
+                Section {
+                    Button {
+                        InsightsLauncher.open()
+                    } label: {
+                        Label {
+                            HStack {
+                                Text("Aura Insights")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward.app").foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            SettingsIcon("chart.bar.xaxis", color: .purple)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    InsightsLauncher.open()
-                } label: {
-                    Label("Ouvrir Aura Insights", systemImage: "chart.bar.xaxis")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(10)
-            }
+            .listStyle(.sidebar)
+            .searchable(text: $search, placement: .sidebar, prompt: "Rechercher")
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         } detail: {
             Group {
                 switch nav.pane ?? .home {
@@ -87,14 +138,88 @@ struct MainView: View {
                 }
             }
             .formStyle(.grouped)
+            .softScrollEdges()
             .navigationTitle((nav.pane ?? .home).title)
+            .navigationSubtitle(ConnectionText.text(engine.status, hasClientID: !store.settings.clientID.isEmpty, paused: store.settings.paused))
+            .toolbar { MainToolbar() }
         }
-        .frame(minWidth: 820, minHeight: 560)
+        .frame(minWidth: 860, minHeight: 580)
         .onAppear {
             if store.settings.clientID.isEmpty { nav.pane = .discord }
             DockPresence.windowDidOpen()
         }
         .onDisappear { DockPresence.windowDidClose() }
+    }
+
+    private func row(_ p: SettingsPane) -> some View {
+        Label {
+            Text(p.title)
+        } icon: {
+            SettingsIcon(p.symbol, color: p.color)
+        }
+        .tag(p)
+    }
+}
+
+/// Toolbar shared by every pane: pause, profile, reconnect, Insights.
+struct MainToolbar: ToolbarContent {
+    @Environment(SettingsStore.self) private var store
+    @Environment(PresenceEngine.self) private var engine
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                ForEach(store.settings.profiles) { profile in
+                    Button {
+                        store.activate(profile)
+                    } label: {
+                        Label(profile.name, systemImage: profile.id == store.settings.activeProfileID ? "checkmark" : profile.symbol)
+                    }
+                }
+            } label: {
+                Label(store.activeProfile?.name ?? "Profil", systemImage: store.activeProfile?.symbol ?? "person.crop.circle")
+            }
+            .help("Profil de présence")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                store.settings.paused.toggle()
+            } label: {
+                Label(store.settings.paused ? "Reprendre" : "Pause",
+                      systemImage: store.settings.paused ? "play.fill" : "pause.fill")
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .help(store.settings.paused ? "Reprendre la diffusion" : "Mettre la diffusion en pause")
+        }
+        if #available(macOS 26, *) {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { InsightsLauncher.open() } label: { Label("Insights", systemImage: "chart.bar.xaxis") }
+                .help("Ouvrir Aura Insights")
+        }
+    }
+}
+
+enum ConnectionText {
+    static func text(_ status: DiscordIPC.Status, hasClientID: Bool, paused: Bool) -> String {
+        if paused { return "Diffusion en pause" }
+        guard hasClientID else { return "Application Discord non configurée" }
+        switch status {
+        case .connected(let user): return user.map { "Connecté à Discord · \($0)" } ?? "Connecté à Discord"
+        case .connecting: return "Connexion à Discord…"
+        case .disconnected: return "Déconnecté de Discord"
+        case .failed(let reason): return reason
+        }
+    }
+
+    static func color(_ status: DiscordIPC.Status, hasClientID: Bool) -> Color {
+        guard hasClientID else { return .orange }
+        switch status {
+        case .connected: return .green
+        case .connecting: return .yellow
+        case .disconnected, .failed: return .red
+        }
     }
 }
 
@@ -115,69 +240,63 @@ enum DockPresence {
     }
 }
 
+/// A form row with a System Settings icon, title and optional subtitle.
+struct IconRow<Trailing: View>: View {
+    let symbol: String
+    let color: Color
+    let title: String
+    var subtitle: String? = nil
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SettingsIcon(symbol, color: color, size: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+    }
+}
+
+extension IconRow where Trailing == EmptyView {
+    init(symbol: String, color: Color, title: String, subtitle: String? = nil) {
+        self.init(symbol: symbol, color: color, title: title, subtitle: subtitle) { EmptyView() }
+    }
+}
+
 // MARK: - Général
 
 struct GeneralPane: View {
     @Environment(SettingsStore.self) private var store
-    @Environment(PresenceEngine.self) private var engine
     @ViewState private var launchAtLogin = LaunchAtLogin.isEnabled
 
     var body: some View {
         @Bindable var store = store
         Form {
             Section {
-                PresenceCard(
-                    snapshot: engine.snapshot,
-                    appName: engine.snapshot.flatMap { engine.appInfo[$0.clientID]?.name },
-                    paused: store.settings.paused
-                )
-                .listRowInsets(EdgeInsets())
-            } header: {
-                Text("Aperçu en direct")
-            }
-
-            Section("Démarrage") {
-                Toggle("Lancer Aura à l'ouverture de session", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, new in
-                        LaunchAtLogin.set(new)
-                        launchAtLogin = LaunchAtLogin.isEnabled
-                    }
+                IconRow(symbol: "power", color: .gray, title: "Ouvrir à la connexion",
+                        subtitle: "Aura démarre en arrière-plan avec ton Mac.") {
+                    Toggle("", isOn: $launchAtLogin).labelsHidden().toggleStyle(.switch)
+                }
+                .onChange(of: launchAtLogin) { _, new in
+                    LaunchAtLogin.set(new)
+                    launchAtLogin = LaunchAtLogin.isEnabled
+                }
                 if LaunchAtLogin.requiresApproval {
-                    HStack {
-                        Text("macOS demande ton autorisation dans Réglages Système.").foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Ouvrir") { LaunchAtLogin.openSystemSettings() }
+                    LabeledContent("macOS attend ton autorisation") {
+                        Button("Ouvrir les Réglages…") { LaunchAtLogin.openSystemSettings() }
                     }
                 }
-                Toggle("Mettre la diffusion en pause", isOn: $store.settings.paused)
-            }
-
-            Section {
-                Toggle("Raccourcis clavier globaux", isOn: $store.settings.globalHotKeys)
-                if store.settings.globalHotKeys {
-                    LabeledContent("Pause / reprise", value: "⌃⌥⌘P")
-                    LabeledContent("Profil suivant", value: "⌃⌥⌘N")
-                    LabeledContent("Changer la source prioritaire", value: "⌃⌥⌘S")
-                    LabeledContent("Ouvrir Aura", value: "⌃⌥⌘A")
+                IconRow(symbol: "pause.fill", color: .orange, title: "Mettre la diffusion en pause",
+                        subtitle: "Ta présence Discord est masquée ; l'historique continue.") {
+                    Toggle("", isOn: $store.settings.paused).labelsHidden().toggleStyle(.switch)
                 }
-            } header: {
-                Text("Raccourcis")
             }
 
-            Section {
-                Toggle("Enregistrer l'historique des activités", isOn: $store.settings.historyEnabled)
-                HStack {
-                    Button("Ouvrir Aura Insights") { InsightsLauncher.open() }
-                    Spacer()
-                    Text("Stocké localement sur ton Mac").font(.caption).foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Historique & statistiques")
-            } footer: {
-                Text("Jeux, musique, vidéos et apps sont enregistrés en parallèle dans une base locale (Application Support/Aura/history.sqlite). Rien n'est envoyé ailleurs.")
-            }
-
-            Section("Langue de la présence") {
+            Section("Langue") {
                 Picker("Textes envoyés sur Discord", selection: $store.settings.language) {
                     ForEach(PresenceLanguage.allCases) { Text($0.title).tag($0) }
                 }
@@ -187,7 +306,7 @@ struct GeneralPane: View {
                 Toggle("Détecter l'inactivité", isOn: $store.settings.idleEnabled)
                 if store.settings.idleEnabled {
                     Stepper(value: $store.settings.idleMinutes, in: 1...120) {
-                        Text("Inactif après \(store.settings.idleMinutes) min sans clavier ni souris")
+                        LabeledContent("Délai", value: "\(store.settings.idleMinutes) min")
                     }
                     Picker("Quand tu es inactif", selection: $store.settings.idleBehavior) {
                         ForEach(IdleBehavior.allCases) { Text($0.title).tag($0) }
@@ -198,8 +317,43 @@ struct GeneralPane: View {
             } footer: {
                 Text("Les jeux, la musique et les vidéos ne sont jamais considérés comme de l'inactivité.")
             }
+
+            Section {
+                Toggle("Enregistrer l'historique des activités", isOn: $store.settings.historyEnabled)
+                LabeledContent("Statistiques") {
+                    Button("Ouvrir Aura Insights") { InsightsLauncher.open() }
+                }
+            } header: {
+                Text("Historique")
+            } footer: {
+                Text("Jeux, musique, vidéos et apps sont enregistrés en parallèle dans une base locale. Rien ne quitte ton Mac.")
+            }
+
+            Section {
+                Toggle("Raccourcis clavier globaux", isOn: $store.settings.globalHotKeys)
+                if store.settings.globalHotKeys {
+                    LabeledContent("Pause / reprise") { KeyCaps("⌃⌥⌘P") }
+                    LabeledContent("Profil suivant") { KeyCaps("⌃⌥⌘N") }
+                    LabeledContent("Source prioritaire suivante") { KeyCaps("⌃⌥⌘S") }
+                    LabeledContent("Ouvrir Aura") { KeyCaps("⌃⌥⌘A") }
+                }
+            } header: {
+                Text("Raccourcis clavier")
+            }
         }
         .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+    }
+}
+
+struct KeyCaps: View {
+    let keys: String
+    init(_ keys: String) { self.keys = keys }
+    var body: some View {
+        Text(keys)
+            .font(.system(.callout, design: .rounded).weight(.medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 }
 
@@ -213,24 +367,24 @@ struct DiscordPane: View {
         @Bindable var store = store
         Form {
             Section {
-                HStack {
-                    StatusPill(status: engine.status, hasClientID: !store.settings.clientID.isEmpty)
-                    Spacer()
-                    Button("Reconnecter") { engine.reconnect() }
+                LabeledContent("État") {
+                    HStack(spacing: 6) {
+                        StatusDot(ConnectionText.color(engine.status, hasClientID: !store.settings.clientID.isEmpty))
+                        Text(ConnectionText.text(engine.status, hasClientID: !store.settings.clientID.isEmpty, paused: false))
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                ClientIDField(title: "Application ID principal", text: $store.settings.clientID, engine: engine)
+                ClientIDField(title: "Application ID", text: $store.settings.clientID, engine: engine)
+                LabeledContent("") {
+                    HStack {
+                        Link("Portail développeur Discord", destination: URL(string: "https://discord.com/developers/applications")!)
+                        Button("Reconnecter") { engine.reconnect() }
+                    }
+                }
             } header: {
-                Text("Connexion")
+                Text("Application principale")
             } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Discord affiche le **nom de l'application** après « Joue à ». Crée-la en 1 minute :")
-                    Text("1. Ouvre le portail développeur Discord et clique sur **New Application**.")
-                    Text("2. Donne-lui le nom que tu veux voir (ex. « sur son Mac », « Aura »…), ajoute une icône si tu veux.")
-                    Text("3. Copie l'**Application ID** de la page *General Information* et colle-le ci-dessus.")
-                    Link("Ouvrir le portail développeur →", destination: URL(string: "https://discord.com/developers/applications")!)
-                        .padding(.top, 2)
-                }
-                .font(.callout)
+                Text("Discord affiche le **nom de l'application** après « Joue à ». Crée une application (New Application), donne-lui le nom voulu et une icône, puis colle son Application ID ici.")
             }
 
             Section {
@@ -239,15 +393,15 @@ struct DiscordPane: View {
                 ClientIDField(title: "Vidéos", text: $store.settings.videoClientID, engine: engine)
                 ClientIDField(title: "Code", text: $store.settings.codingClientID, engine: engine)
             } header: {
-                Text("Applications par catégorie (optionnel)")
+                Text("Applications par catégorie")
             } footer: {
-                Text("Laisse vide pour utiliser l'application principale. Utile pour afficher « Écoute Musique » ou « Joue à Xcode » avec des noms différents.")
+                Text("Optionnel. Laisse vide pour utiliser l'application principale.")
             }
 
             Section {
-                Toggle("Utiliser l'identité officielle des jeux reconnus par Discord", isOn: $store.settings.useOfficialGameIdentity)
+                Toggle("Identité officielle des jeux", isOn: $store.settings.useOfficialGameIdentity)
             } footer: {
-                Text("Pour les ~25 000 jeux connus de Discord, ta présence affichera « Joue à <nom du jeu> » avec son icône officielle.")
+                Text("Pour les ~25 000 jeux connus de Discord, ta présence affiche « Joue à <nom du jeu> » avec son icône officielle.")
             }
         }
     }
@@ -259,27 +413,33 @@ struct ClientIDField: View {
     let engine: PresenceEngine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            TextField(title, text: $text, prompt: Text("ex. 1234567890123456789"))
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .trailing, spacing: 4) {
+            TextField(title, text: $text, prompt: Text("Non défini"))
                 .font(.body.monospacedDigit())
+                .multilineTextAlignment(.trailing)
                 .onChange(of: text) { _, new in
                     let digits = new.filter(\.isNumber)
                     if digits != new { text = digits }
                 }
             let id = text.trimmingCharacters(in: .whitespaces)
             if !id.isEmpty {
-                if let info = engine.appInfo[id] {
-                    HStack(spacing: 6) {
-                        RemoteImage(url: info.iconURL, symbol: "app.fill").frame(width: 16, height: 16).clipShape(RoundedRectangle(cornerRadius: 4))
-                        Text("Affiché comme « \(info.name) »").font(.caption).foregroundStyle(.green)
+                Group {
+                    if let info = engine.appInfo[id] {
+                        HStack(spacing: 5) {
+                            RemoteImage(url: info.iconURL, symbol: "app.fill").frame(width: 14, height: 14)
+                                .clipShape(RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+                            Text("« \(info.name) »")
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        }
+                    } else if id.count < 17 {
+                        Label("17 à 20 chiffres", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    } else {
+                        HStack(spacing: 4) { ProgressView().controlSize(.mini); Text("Vérification…") }
+                            .task(id: id) { await engine.loadAppInfo(id) }
                     }
-                } else if id.count < 17 {
-                    Text("Un Application ID fait 17 à 20 chiffres.").font(.caption).foregroundStyle(.orange)
-                } else {
-                    Text("Vérification…").font(.caption).foregroundStyle(.secondary)
-                        .task(id: id) { await engine.loadAppInfo(id) }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -291,88 +451,92 @@ struct SourcesPane: View {
     @Environment(SettingsStore.self) private var store
     @Environment(PresenceEngine.self) private var engine
 
+    private func color(_ kind: SourceKind) -> Color {
+        switch kind {
+        case .game: .green
+        case .video: .red
+        case .music: .pink
+        case .app: .blue
+        }
+    }
+
     var body: some View {
         @Bindable var store = store
         Form {
             Section {
-                List {
-                    ForEach(store.settings.priority) { kind in
-                        HStack(spacing: 10) {
-                            Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
-                            Image(systemName: kind.symbol).frame(width: 20).foregroundStyle(Color.accentColor)
-                            Text(kind.title)
-                            Spacer()
-                            Toggle("", isOn: Binding(
-                                get: { store.settings.isEnabled(kind) },
-                                set: { on in
-                                    if on { store.settings.disabledSources.remove(kind) } else { store.settings.disabledSources.insert(kind) }
-                                }
-                            ))
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                        }
-                        .padding(.vertical, 2)
+                ForEach(store.settings.priority) { kind in
+                    IconRow(symbol: kind.symbol, color: color(kind), title: kind.title) {
+                        Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
+                            .help("Glisse pour réordonner")
+                        Toggle("", isOn: Binding(
+                            get: { store.settings.isEnabled(kind) },
+                            set: { on in
+                                if on { store.settings.disabledSources.remove(kind) } else { store.settings.disabledSources.insert(kind) }
+                            }
+                        ))
+                        .labelsHidden().toggleStyle(.switch)
                     }
-                    .onMove { from, to in store.settings.priority.move(fromOffsets: from, toOffset: to) }
                 }
-                .frame(minHeight: 150)
+                .onMove { from, to in store.settings.priority.move(fromOffsets: from, toOffset: to) }
             } header: {
                 Text("Priorité")
             } footer: {
-                Text("Glisse pour réordonner. Aura affiche la première source active de la liste : par défaut un jeu passe avant une vidéo, qui passe avant la musique, puis l'app au premier plan.")
+                Text("Glisse les sources pour les réordonner : Aura affiche la première source active.")
             }
 
-            Section("Jeux") {
+            Section {
                 if engine.runningGames.isEmpty {
-                    Text("Aucun jeu détecté en ce moment.").foregroundStyle(.secondary)
+                    LabeledContent("Jeux en cours", value: "Aucun")
                 } else {
                     ForEach(engine.runningGames, id: \.pid) { game in
-                        HStack {
-                            Image(systemName: "gamecontroller.fill").foregroundStyle(.green)
-                            Text(game.name)
-                            Spacer()
-                            if let platform = game.platform { Text(platform).foregroundStyle(.secondary) }
-                            if game.discordAppID != nil { Text("Reconnu par Discord").font(.caption).foregroundStyle(.secondary) }
+                        LabeledContent(game.name) {
+                            HStack(spacing: 6) {
+                                if game.discordAppID != nil {
+                                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.indigo).help("Reconnu par Discord")
+                                }
+                                Text(game.platform ?? "macOS")
+                            }
                         }
                     }
                 }
-                Text("Détection : bibliothèque Steam, catégorie « Jeux » de l'app, et catalogue officiel de Discord. Un jeu non détecté ? Ajoute une règle « Considérer comme un jeu ».")
-                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("Jeux")
+            } footer: {
+                Text("Steam, Epic, GOG, Battle.net, CrossOver/Whisky, GeForce NOW, catégorie « Jeux » et catalogue Discord. Un jeu manque ? Crée une règle « Considérer comme un jeu ».")
             }
 
             Section("Musique") {
+                Toggle("Autres lecteurs", isOn: $store.settings.musicOtherPlayers)
+                    .help("Onglets YouTube Music, SoundCloud, Deezer, Spotify Web, TIDAL… et apps TIDAL, Deezer, Qobuz")
                 Toggle("Afficher aussi la musique en pause", isOn: $store.settings.musicShowPaused)
-                Toggle("Barre de progression du morceau", isOn: $store.settings.showMusicProgress)
-                Toggle("Autres lecteurs (onglets web, TIDAL, Deezer…)", isOn: $store.settings.musicOtherPlayers)
-                Text("Spotify et Apple Music en natif ; YouTube Music, SoundCloud, Deezer, Spotify Web, TIDAL, Bandcamp, Amazon Music dans n'importe quel onglet, même en arrière-plan ; apps TIDAL, Deezer, Qobuz via leur fenêtre (Accessibilité).")
-                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Barre de progression", isOn: $store.settings.showMusicProgress)
             }
 
-            Section("Vidéos & navigateurs") {
-                Toggle("Afficher le titre des pages web", isOn: $store.settings.showBrowserPageTitles)
-                Toggle("Détails des films et séries (titre, épisode, affiche, progression)", isOn: $store.settings.readStreamingDetails)
+            Section {
+                Toggle("Titre des pages web", isOn: $store.settings.showBrowserPageTitles)
+                Toggle("Détails des films et séries", isOn: $store.settings.readStreamingDetails)
+            } header: {
+                Text("Vidéos & navigateurs")
+            } footer: {
                 if store.settings.readStreamingDetails {
-                    Text("Active « Autoriser JavaScript depuis les Apple Events » : Chrome/Arc/Brave → menu Affichage › Options pour les développeurs ; Safari → Réglages › Avancés › « Afficher les fonctionnalités pour les développeurs », puis menu Développement.")
-                        .font(.caption).foregroundStyle(.orange)
+                    Text("Active « Autoriser JavaScript depuis les Apple Events » dans ton navigateur (menu Développement de Safari, Affichage › Options pour les développeurs dans Chrome, Arc, Brave).")
                 }
-                Text("YouTube (miniature + chaîne), Twitch (avatar du streamer), Netflix, Prime Video, Disney+, Crunchyroll, GitHub… dans Safari, Chrome, Arc, Brave, Edge, Vivaldi, Opera.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("App au premier plan") {
-                Toggle("Afficher les noms de fichiers et de projets", isOn: $store.settings.showWindowTitles)
-                Toggle("Branche git du projet ouvert", isOn: $store.settings.showGitBranch)
-                Toggle("Bouton « Voir sur GitHub » (dépôts GitHub uniquement)", isOn: $store.settings.showRepoButton)
-                TextField("Dossiers de projets (séparés par des virgules)", text: Binding(
-                    get: { store.settings.projectRoots.joined(separator: ", ") },
-                    set: { store.settings.projectRoots = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
-                ))
-                .font(.caption)
-                Toggle("Lire les titres de fenêtres (Accessibilité)", isOn: $store.settings.readWindowTitlesWithAccessibility)
+                Toggle("Noms de fichiers et de projets", isOn: $store.settings.showWindowTitles)
+                Toggle("Branche git", isOn: $store.settings.showGitBranch)
+                Toggle("Bouton « Voir sur GitHub »", isOn: $store.settings.showRepoButton)
+                Toggle("Lire les titres de fenêtres", isOn: $store.settings.readWindowTitlesWithAccessibility)
                     .onChange(of: store.settings.readWindowTitlesWithAccessibility) { _, on in
                         if on && !WindowInspector.isTrusted { WindowInspector.requestAccess() }
                     }
+                TextField("Dossiers de projets", text: Binding(
+                    get: { store.settings.projectRoots.joined(separator: ", ") },
+                    set: { store.settings.projectRoots = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
+                ))
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -386,23 +550,32 @@ struct DisplayPane: View {
     var body: some View {
         @Bindable var store = store
         Form {
-            Section("Éléments de la présence") {
-                Toggle("Temps écoulé", isOn: $store.settings.showElapsedTime)
-                Toggle("Petite icône (plateforme, lecteur, navigateur)", isOn: $store.settings.showSmallIcon)
-                Toggle("Logo du langage quand tu codes (Swift, TypeScript, Python…)", isOn: $store.settings.codingLanguageIcons)
-                Toggle("Préférer les visuels animés (GIF, WebP)", isOn: $store.settings.preferAnimatedArtwork)
-                    .help("Jaquettes animées SteamGridDB pour les jeux ; tu peux aussi mettre l'URL d'un GIF dans une règle.")
-                Toggle("Boutons (Écouter sur Spotify, Voir sur YouTube…)", isOn: $store.settings.showButtons)
-            }
             Section {
-                Text("Les boutons ne sont visibles que par les autres membres, pas sur ton propre profil : c'est une limite de Discord.")
-                    .foregroundStyle(.secondary)
+                IconRow(symbol: "timer", color: .green, title: "Temps écoulé") {
+                    Toggle("", isOn: $store.settings.showElapsedTime).labelsHidden().toggleStyle(.switch)
+                }
+                IconRow(symbol: "circle.circle.fill", color: .blue, title: "Petite icône", subtitle: "Plateforme, lecteur ou navigateur") {
+                    Toggle("", isOn: $store.settings.showSmallIcon).labelsHidden().toggleStyle(.switch)
+                }
+                IconRow(symbol: "curlybraces", color: .indigo, title: "Logo du langage", subtitle: "Swift, TypeScript, Python… quand tu codes") {
+                    Toggle("", isOn: $store.settings.codingLanguageIcons).labelsHidden().toggleStyle(.switch)
+                }
+                IconRow(symbol: "photo.stack.fill", color: .pink, title: "Visuels animés", subtitle: "Jaquettes GIF / WebP quand elles existent") {
+                    Toggle("", isOn: $store.settings.preferAnimatedArtwork).labelsHidden().toggleStyle(.switch)
+                }
+                IconRow(symbol: "rectangle.on.rectangle", color: .orange, title: "Boutons", subtitle: "Écouter sur Spotify, Voir sur YouTube…") {
+                    Toggle("", isOn: $store.settings.showButtons).labelsHidden().toggleStyle(.switch)
+                }
+            } header: {
+                Text("Éléments de la présence")
+            } footer: {
+                Text("Les boutons ne sont visibles que par les autres membres, pas sur ton propre profil.")
             }
         }
     }
 }
 
-// MARK: - Permissions
+// MARK: - Confidentialité
 
 struct PermissionsPane: View {
     @Environment(PresenceEngine.self) private var engine
@@ -410,24 +583,26 @@ struct PermissionsPane: View {
     var body: some View {
         Form {
             Section {
-                PermissionRow(
-                    title: "Accessibilité",
-                    detail: "Lire le titre de la fenêtre active (fichier ouvert dans ton éditeur, document…).",
-                    granted: engine.accessibilityGranted,
-                    action: {
-                        WindowInspector.requestAccess()
-                        WindowInspector.openAccessibilitySettings()
-                    }
-                )
-                PermissionRow(
-                    title: "Automatisation",
-                    detail: "Interroger Spotify, Musique et ton navigateur. macOS te le demande à la première utilisation de chaque app.",
-                    granted: engine.automationDenied.isEmpty,
-                    deniedDetail: engine.automationDenied.isEmpty ? nil : "Refusé pour : " + engine.automationDenied.sorted().joined(separator: ", "),
-                    action: { WindowInspector.openAutomationSettings() }
-                )
+                PermissionRow(symbol: "accessibility", color: .blue, title: "Accessibilité",
+                              detail: "Titre de la fenêtre active : fichier ouvert, apps TIDAL et Deezer.",
+                              granted: engine.accessibilityGranted) {
+                    WindowInspector.requestAccess()
+                    WindowInspector.openAccessibilitySettings()
+                }
+                PermissionRow(symbol: "gearshape.2.fill", color: .gray, title: "Automatisation",
+                              detail: engine.automationDenied.isEmpty
+                                ? "Spotify, Musique et navigateurs. Demandée à la première utilisation."
+                                : "Refusée pour : " + engine.automationDenied.sorted().joined(separator: ", "),
+                              granted: engine.automationDenied.isEmpty) {
+                    WindowInspector.openAutomationSettings()
+                }
+                PermissionRow(symbol: "internaldrive.fill", color: .indigo, title: "Accès complet au disque",
+                              detail: "Optionnel : détecter automatiquement les modes Concentration.",
+                              granted: FocusMonitor.canRead) {
+                    FocusMonitor.openFullDiskAccessSettings()
+                }
             } footer: {
-                Text("Tout est traité localement sur ton Mac. Aura ne contacte que Discord (en local) et des API publiques pour les images (iTunes, Steam, YouTube).")
+                Text("Tout est traité localement. Aura contacte uniquement Discord (sur ton Mac) et des API publiques pour les images.")
             }
         }
         .onAppear { engine.refreshPermissions() }
@@ -435,26 +610,24 @@ struct PermissionsPane: View {
 }
 
 struct PermissionRow: View {
+    let symbol: String
+    let color: Color
     let title: String
     let detail: String
     let granted: Bool
-    var deniedDetail: String?
     let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: granted ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(granted ? .green : .orange)
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline)
-                Text(detail).font(.callout).foregroundStyle(.secondary)
-                if let deniedDetail { Text(deniedDetail).font(.caption).foregroundStyle(.orange) }
+        IconRow(symbol: symbol, color: color, title: title, subtitle: detail) {
+            if granted {
+                Label("Autorisé", systemImage: "checkmark.circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.green)
+                    .font(.callout)
+            } else {
+                Button("Autoriser…", action: action)
             }
-            Spacer()
-            Button(granted ? "Réglages" : "Autoriser", action: action)
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -468,42 +641,55 @@ struct AboutPane: View {
         @Bindable var store = store
         Form {
             Section {
-                HStack(spacing: 16) {
-                    AuraLogo(size: 72)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Aura").font(.largeTitle.bold())
-                        Text("Ta Rich Presence Discord, automatique et soignée.").foregroundStyle(.secondary)
-                        Text("Version \(updater.currentVersion)").font(.caption).foregroundStyle(.tertiary)
-                    }
+                VStack(spacing: 8) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 96, height: 96)
+                    Text("Aura").font(.title.bold())
+                    Text("Version \(updater.currentVersion)").foregroundStyle(.secondary)
+                    Text("Ta Rich Presence Discord, automatique et soignée.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
+
             Section("Mises à jour") {
-                Toggle("Vérifier automatiquement chaque jour", isOn: $store.settings.autoCheckUpdates)
-                HStack {
-                    switch updater.phase {
-                    case .idle: Text("Pas encore vérifié").foregroundStyle(.secondary)
-                    case .checking: ProgressView().controlSize(.small); Text("Vérification…")
-                    case .upToDate: Label("Aura est à jour", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    case .available(let release):
-                        Label("Version \(release.version) disponible", systemImage: "arrow.down.circle.fill").foregroundStyle(.blue)
-                        Spacer()
-                        Link("Notes", destination: release.pageURL)
-                        Button("Installer et relancer") { Task { await updater.install(release) } }
-                            .buttonStyle(.borderedProminent)
-                    case .downloading: ProgressView().controlSize(.small); Text("Téléchargement…")
-                    case .installing: ProgressView().controlSize(.small); Text("Installation…")
-                    case .failed(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    }
-                    Spacer()
-                    Button("Vérifier maintenant") { Task { await updater.check() } }
+                Toggle("Rechercher automatiquement", isOn: $store.settings.autoCheckUpdates)
+                LabeledContent {
+                    updateStatus
+                } label: {
+                    Button("Rechercher maintenant") { Task { await updater.check() } }
                         .disabled(updater.phase == .checking || updater.phase == .downloading)
                 }
             }
+
             Section {
-                Link("Code source sur GitHub", destination: URL(string: "https://github.com/\(Updater.repository)")!)
-                Button("Ouvrir le dossier de données") { NSWorkspace.shared.open(AuraPaths.support) }
+                LabeledContent("Code source") {
+                    Link("github.com/\(Updater.repository)", destination: URL(string: "https://github.com/\(Updater.repository)")!)
+                }
+                LabeledContent("Données") {
+                    Button("Afficher dans le Finder") { NSWorkspace.shared.open(AuraPaths.support) }
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var updateStatus: some View {
+        switch updater.phase {
+        case .idle: Text("Jamais vérifié").foregroundStyle(.secondary)
+        case .checking: HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Recherche…") }
+        case .upToDate: Label("Aura est à jour", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case .available(let release):
+            HStack {
+                Link("Version \(release.version)", destination: release.pageURL)
+                Button("Installer") { Task { await updater.install(release) } }
+                    .nativeButtonStyle(prominent: true)
+            }
+        case .downloading: HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Téléchargement…") }
+        case .installing: HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Installation…") }
+        case .failed(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         }
     }
 }

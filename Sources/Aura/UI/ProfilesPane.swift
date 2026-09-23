@@ -1,3 +1,4 @@
+import AuraKit
 import SwiftUI
 
 struct ProfilesPane: View {
@@ -9,40 +10,59 @@ struct ProfilesPane: View {
         Form {
             Section {
                 ForEach($store.settings.profiles) { $profile in
+                    let active = profile.id == store.settings.activeProfileID
                     HStack(spacing: 10) {
-                        Image(systemName: profile.symbol).frame(width: 20).foregroundStyle(Color.accentColor)
-                        TextField("Nom", text: $profile.name).textFieldStyle(.plain)
+                        SettingsIcon(profile.symbol, color: active ? .accentColor : .orange, size: 22)
+                        VStack(alignment: .leading, spacing: 1) {
+                            TextField("Nom", text: $profile.name).textFieldStyle(.plain)
+                            Text(summary(profile)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
                         Spacer()
-                        Text(summary(profile)).font(.caption).foregroundStyle(.secondary)
-                        if profile.id == store.settings.activeProfileID {
-                            Text("Actif").font(.caption.bold()).foregroundStyle(.green)
+                        if active {
+                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor).fontWeight(.semibold)
                         } else {
                             Button("Activer") { store.activate(profile) }
                         }
                     }
+                    .contextMenu {
+                        Button("Activer") { store.activate(profile) }
+                        Button("Supprimer", role: .destructive) { store.settings.profiles.removeAll { $0.id == profile.id } }
+                    }
                 }
                 .onDelete { store.settings.profiles.remove(atOffsets: $0) }
+                .onMove { store.settings.profiles.move(fromOffsets: $0, toOffset: $1) }
             } header: {
                 Text("Profils")
             } footer: {
-                Text("Un profil règle la priorité des sources, les sources actives, les titres, boutons, temps écoulé, branche git et la pause. Change de profil depuis la barre des menus, un raccourci clavier, un Raccourci (aura://profile/<nom>) ou automatiquement avec un mode Concentration.")
+                Text("Un profil règle la priorité et l'activation des sources, les titres, boutons, temps écoulé, branche git et la pause. Change-le depuis la barre des menus, ⌃⌥⌘N, un lien aura://profile/<nom> ou un mode Concentration.")
             }
             FocusSection()
 
-            Section("Nouveau profil depuis les réglages actuels") {
-                HStack {
-                    TextField("Nom du profil", text: $newName)
-                    Button("Enregistrer") {
-                        store.saveCurrentAsProfile(named: newName.trimmingCharacters(in: .whitespaces))
-                        newName = ""
+            Section {
+                LabeledContent {
+                    HStack {
+                        TextField("Nom", text: $newName, prompt: Text("Mon profil"))
+                            .multilineTextAlignment(.trailing)
+                            .onSubmit(save)
+                        Button("Enregistrer", action: save)
+                            .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                } label: {
+                    Text("Nouveau profil")
+                    Text("À partir des réglages actuels")
                 }
-                Button("Restaurer les profils par défaut") {
-                    store.settings.profiles = PresenceProfile.presets
+                LabeledContent("") {
+                    Button("Restaurer les profils par défaut") { store.settings.profiles = PresenceProfile.presets }
                 }
             }
         }
+    }
+
+    private func save() {
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        store.saveCurrentAsProfile(named: name)
+        newName = ""
     }
 
     private func summary(_ p: PresenceProfile) -> String {
@@ -78,22 +98,23 @@ struct FocusSection: View {
                     Text("Ne rien changer").tag("")
                     ForEach(store.settings.profiles) { Text($0.name).tag($0.name) }
                 }
-                if let focus = engine.activeFocus { Label("Concentration active : \(focus)", systemImage: "moon.fill").foregroundStyle(.indigo) }
-            } else {
-                HStack {
-                    Text("Pour détecter automatiquement ta Concentration, donne à Aura l'« Accès complet au disque ».")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Ouvrir") { FocusMonitor.openFullDiskAccessSettings() }
+                if let focus = engine.activeFocus {
+                    LabeledContent("Concentration active") { Label(focus, systemImage: "moon.fill").foregroundStyle(.indigo) }
                 }
-                Button("Ou créer une automatisation dans Raccourcis") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+            } else {
+                IconRow(symbol: "moon.fill", color: .indigo, title: "Détection automatique",
+                        subtitle: "Nécessite l'accès complet au disque.") {
+                    Button("Autoriser…") { FocusMonitor.openFullDiskAccessSettings() }
+                }
+                IconRow(symbol: "square.2.layers.3d.fill", color: .pink, title: "Automatisation Raccourcis",
+                        subtitle: "Quand une Concentration s'active → Ouvrir l'URL aura://profile/<nom>.") {
+                    Button("Ouvrir Raccourcis") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+                    }
                 }
             }
         } header: {
             Text("Modes de Concentration")
-        } footer: {
-            Text("Sans accès complet au disque : app Raccourcis › Automatisation › « Quand <Concentration> s'active » › Ouvrir l'URL aura://profile/Discret.")
         }
         .onAppear {
             readable = FocusMonitor.canRead

@@ -26,7 +26,8 @@ struct AuraApp: App {
                 .environment(delegate.store)
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 980, height: 680)
+        .windowToolbarStyle(.unified)
+        .defaultSize(width: 1000, height: 700)
         .defaultLaunchBehavior(delegate.needsOnboarding ? .presented : .suppressed)
         .commands {
             CommandGroup(replacing: .appSettings) {
@@ -83,7 +84,24 @@ struct MenuBarIcon: View {
 @MainActor
 final class WindowOpener {
     static let shared = WindowOpener()
-    var open: ((String) -> Void)?
+    private var opener: ((String) -> Void)?
+    private var pending: String?
+
+    /// Opens a window by id; requests arriving before SwiftUI is ready are replayed once it is.
+    var open: ((String) -> Void)? {
+        get { { [weak self] id in self?.request(id) } }
+        set {
+            opener = newValue
+            if let id = pending, let newValue {
+                pending = nil
+                newValue(id)
+            }
+        }
+    }
+
+    private func request(_ id: String) {
+        if let opener { opener(id) } else { pending = id }
+    }
 }
 
 @MainActor
