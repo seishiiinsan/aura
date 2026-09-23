@@ -116,6 +116,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var showButtons = true
     var showSmallIcon = true
     var codingLanguageIcons = true
+    var iconHost = HostedIcons.defaultBase
     var showGitBranch = true
     var showRepoButton = false
     var projectRoots: [String] = GitInspector.defaultRoots
@@ -161,6 +162,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         showButtons = v(.showButtons, d.showButtons)
         showSmallIcon = v(.showSmallIcon, d.showSmallIcon)
         codingLanguageIcons = v(.codingLanguageIcons, d.codingLanguageIcons)
+        iconHost = v(.iconHost, d.iconHost)
         showGitBranch = v(.showGitBranch, d.showGitBranch)
         showRepoButton = v(.showRepoButton, d.showRepoButton)
         projectRoots = v(.projectRoots, d.projectRoots)

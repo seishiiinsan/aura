@@ -220,6 +220,8 @@ final class PresenceEngine {
 
     private func settingsChanged() {
         media.includeOtherPlayers = store.settings.musicOtherPlayers
+        let host = store.settings.iconHost
+        Task { await ArtworkService.shared.setIconHost(host) }
         // Rules may turn apps into games or hide them.
         games.invalidateAll()
         Task { await rescanGames() }
