@@ -1,17 +1,21 @@
+import AuraKit
 import SwiftUI
 
 /// A faithful-ish rendering of how the activity looks on a Discord profile.
 struct PresenceCard: View {
+    enum Chrome { case none, surface, glass }
+
     let snapshot: PresenceSnapshot?
     let appName: String?
     var paused = false
+    /// Background: none inside a Form row, a content surface, or Liquid Glass in floating panels.
+    var chrome: Chrome = .surface
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(header)
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .textCase(.uppercase)
                 .lineLimit(1)
 
             if let p = snapshot?.presence, !paused {
@@ -19,13 +23,14 @@ struct PresenceCard: View {
                     artwork(p)
                     VStack(alignment: .leading, spacing: 2) {
                         if let d = p.details {
-                            Text(d).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                            Text(d).font(.headline).lineLimit(1)
+                                .contentTransition(.opacity)
                         }
                         if let s = p.state {
-                            Text(s).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                            Text(s).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
                         if let large = p.largeText, p.type == .listening {
-                            Text(large).font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1)
+                            Text(large).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                         }
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
                             timeView(p, now: ctx.date)
@@ -34,31 +39,33 @@ struct PresenceCard: View {
                     Spacer(minLength: 0)
                 }
                 if !p.buttons.isEmpty {
-                    VStack(spacing: 6) {
+                    HStack(spacing: 6) {
                         ForEach(p.buttons, id: \.self) { b in
-                            Text(b.label)
-                                .font(.system(size: 12, weight: .medium))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                            Link(destination: URL(string: b.url) ?? URL(string: "https://discord.com")!) {
+                                Text(b.label).font(.callout.weight(.medium)).frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
                         }
                     }
                 }
             } else {
                 HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(.quaternary)
                         .frame(width: 72, height: 72)
                         .overlay(Image(systemName: paused ? "pause.fill" : "moon.zzz.fill").font(.title2).foregroundStyle(.secondary))
-                    Text(paused ? "Aura est en pause" : "Aucune activité à afficher")
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(paused ? "Diffusion en pause" : "Aucune activité").font(.headline)
+                        Text(paused ? "Ta présence Discord est masquée." : "Ouvre un jeu, une musique ou une app.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
             }
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator.opacity(0.5)))
+        .modifier(CardChrome(chrome: chrome))
+        .animation(.smooth, value: snapshot?.presence.details)
     }
 
     private var header: String {
@@ -72,7 +79,8 @@ struct PresenceCard: View {
         ZStack(alignment: .bottomTrailing) {
             RemoteImage(url: p.largeImage, symbol: snapshot?.kind?.symbol ?? "sparkles")
                 .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
                 .help(p.largeText ?? "")
             if let small = p.smallImage {
                 RemoteImage(url: small, symbol: "circle.fill")
@@ -91,13 +99,9 @@ struct PresenceCard: View {
             let total = end.timeIntervalSince(start)
             let elapsed = min(max(0, now.timeIntervalSince(start)), total)
             VStack(spacing: 2) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.quaternary)
-                        Capsule().fill(.primary).frame(width: geo.size.width * elapsed / total)
-                    }
-                }
-                .frame(height: 4)
+                ProgressView(value: elapsed, total: total)
+                    .progressViewStyle(.linear)
+                    .controlSize(.small)
                 HStack {
                     Text(Self.format(elapsed))
                     Spacer()
@@ -149,8 +153,25 @@ struct RemoteImage: View {
 
     private var placeholder: some View {
         ZStack {
-            LinearGradient(colors: [.purple.opacity(0.6), .indigo.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: symbol).foregroundStyle(.white.opacity(0.9))
+            Rectangle().fill(.quaternary)
+            Image(systemName: symbol).font(.title2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct CardChrome: ViewModifier {
+    let chrome: PresenceCard.Chrome
+
+    func body(content: Content) -> some View {
+        switch chrome {
+        case .none:
+            content.padding(.vertical, 4)
+        case .surface:
+            content.contentSurface(cornerRadius: 14, padding: 14)
+        case .glass:
+            content
+                .padding(14)
+                .nativeGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
     }
 }

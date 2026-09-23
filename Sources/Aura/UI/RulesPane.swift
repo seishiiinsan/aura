@@ -1,76 +1,105 @@
 import AppKit
+import AuraKit
 import SwiftUI
 
 struct RulesPane: View {
     @Environment(SettingsStore.self) private var store
-    @ViewState private var selection: AppRule.ID?
+    @ViewState private var editing: AppRule.ID?
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                List(selection: $selection) {
+        Form {
+            Section {
+                if store.settings.rules.isEmpty {
+                    ContentUnavailableView {
+                        Label("Aucune règle", systemImage: "slider.horizontal.3")
+                    } description: {
+                        Text("Personnalise, masque ou marque comme jeu n'importe quelle app.")
+                    } actions: {
+                        addMenu.nativeButtonStyle(prominent: true)
+                    }
+                } else {
                     ForEach(store.settings.rules) { rule in
-                        HStack(spacing: 8) {
-                            AppIconView(bundleID: rule.bundleID).frame(width: 20, height: 20)
+                        HStack(spacing: 10) {
+                            AppIconView(bundleID: rule.bundleID).frame(width: 26, height: 26)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(rule.appName).lineLimit(1)
-                                Text(rule.mode.title + (rule.conditions.isEmpty ? "" : " · sous conditions"))
-                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(rule.appName)
+                                Text(summary(rule)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
+                            Spacer()
+                            Button("Modifier…") { editing = rule.id }
                         }
-                        .tag(rule.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { editing = rule.id }
+                        .contextMenu {
+                            Button("Modifier…") { editing = rule.id }
+                            Button("Dupliquer") { duplicate(rule) }
+                            Divider()
+                            Button("Supprimer", role: .destructive) { store.settings.rules.removeAll { $0.id == rule.id } }
+                        }
                     }
                     .onDelete { store.settings.rules.remove(atOffsets: $0) }
                     .onMove { store.settings.rules.move(fromOffsets: $0, toOffset: $1) }
                 }
-                .overlay {
-                    if store.settings.rules.isEmpty {
-                        ContentUnavailableView("Aucune règle", systemImage: "slider.horizontal.3",
-                                               description: Text("Ajoute une app pour personnaliser, masquer ou marquer comme jeu."))
-                    }
-                }
-                Divider()
-                HStack(spacing: 4) {
-                    Menu {
-                        Section("Apps ouvertes") {
-                            ForEach(runningApps, id: \.bundleIdentifier) { app in
-                                Button(app.localizedName ?? app.bundleIdentifier ?? "?") { add(app) }
-                            }
-                        }
-                        Divider()
-                        Button("Choisir une app…") { pickApp() }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    Button {
-                        if let selection { store.settings.rules.removeAll { $0.id == selection } }
-                        selection = nil
-                    } label: {
-                        Image(systemName: "minus")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(selection == nil)
+            } header: {
+                HStack {
+                    Text("Règles")
                     Spacer()
+                    if !store.settings.rules.isEmpty { addMenu.menuStyle(.button).buttonStyle(.borderless).fixedSize() }
                 }
-                .padding(6)
+            } footer: {
+                Text("Les règles d'une même app sont évaluées dans l'ordre : la première dont les conditions correspondent s'applique. Glisse pour réordonner.")
             }
-            .frame(minWidth: 200, idealWidth: 220, maxWidth: 280)
-
-            Group {
-                if let index = store.settings.rules.firstIndex(where: { $0.id == selection }) {
-                    RuleEditor(rule: Binding(
-                        get: { store.settings.rules[index] },
-                        set: { store.settings.rules[index] = $0 }
-                    ))
-                    .id(selection)
-                } else {
-                    ContentUnavailableView("Sélectionne une règle", systemImage: "hand.point.left")
-                }
-            }
-            .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .sheet(item: Binding(
+            get: { editing.map { EditingID(id: $0) } },
+            set: { editing = $0?.id }
+        )) { item in
+            if let index = store.settings.rules.firstIndex(where: { $0.id == item.id }) {
+                RuleSheet(rule: Binding(
+                    get: { store.settings.rules[index] },
+                    set: { store.settings.rules[index] = $0 }
+                ), onDelete: {
+                    store.settings.rules.remove(at: index)
+                    editing = nil
+                })
+            }
+        }
+    }
+
+    private struct EditingID: Identifiable { let id: UUID }
+
+    private var addMenu: some View {
+        Menu {
+            Section("Apps ouvertes") {
+                ForEach(runningApps, id: \.bundleIdentifier) { app in
+                    Button {
+                        add(app)
+                    } label: {
+                        if let icon = app.icon { Label { Text(app.localizedName ?? "?") } icon: { Image(nsImage: icon) } }
+                        else { Text(app.localizedName ?? "?") }
+                    }
+                }
+            }
+            Divider()
+            Button("Choisir une app…") { pickApp() }
+        } label: {
+            Label("Ajouter une règle", systemImage: "plus")
+        }
+    }
+
+    private func summary(_ rule: AppRule) -> String {
+        var parts = [rule.mode.title]
+        if !rule.conditions.isEmpty { parts.append("sous conditions") }
+        if !rule.details.isEmpty { parts.append("« \(rule.details) »") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func duplicate(_ rule: AppRule) {
+        var copy = AppRule(bundleID: rule.bundleID, appName: rule.appName)
+        let id = copy.id
+        copy = rule
+        copy.id = id
+        store.settings.rules.append(copy)
     }
 
     private var runningApps: [NSRunningApplication] {
@@ -88,7 +117,7 @@ struct RulesPane: View {
         // Several rules per app are allowed (with different conditions); the first match wins.
         let rule = AppRule(bundleID: bundleID, appName: name)
         store.settings.rules.append(rule)
-        selection = rule.id
+        editing = rule.id
     }
 
     private func pickApp() {
@@ -102,6 +131,29 @@ struct RulesPane: View {
     }
 }
 
+/// Modal editor for one rule, with the standard sheet toolbar.
+struct RuleSheet: View {
+    @Binding var rule: AppRule
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            RuleEditor(rule: $rule)
+                .navigationTitle(rule.appName)
+                .toolbar {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button("Supprimer la règle", role: .destructive, action: onDelete)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("OK") { dismiss() }.keyboardShortcut(.defaultAction)
+                    }
+                }
+        }
+        .frame(minWidth: 540, idealWidth: 580, minHeight: 560, idealHeight: 680)
+    }
+}
+
 struct RuleEditor: View {
     @Binding var rule: AppRule
     @Environment(PresenceEngine.self) private var engine
@@ -110,8 +162,8 @@ struct RuleEditor: View {
         Form {
             Section {
                 HStack(spacing: 12) {
-                    AppIconView(bundleID: rule.bundleID).frame(width: 40, height: 40)
-                    VStack(alignment: .leading) {
+                    AppIconView(bundleID: rule.bundleID).frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 2) {
                         TextField("Nom", text: $rule.appName).font(.headline).textFieldStyle(.plain)
                         Text(rule.bundleID).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
                     }
@@ -119,20 +171,21 @@ struct RuleEditor: View {
                 Picker("Comportement", selection: $rule.mode) {
                     ForEach(RuleMode.allCases) { Text($0.title).tag($0) }
                 }
-                .pickerStyle(.segmented)
                 if rule.mode == .customize {
-                    HStack {
-                        Button {
-                            engine.preview(rule)
-                        } label: {
-                            Label("Tester 10 s sur Discord", systemImage: "play.circle")
-                        }
-                        .disabled(engine.previewEndsAt != nil)
+                    LabeledContent("Aperçu") {
                         if let end = engine.previewEndsAt {
                             TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                                Text("Aperçu en ligne… \(max(0, Int(end.timeIntervalSince(ctx.date))))s")
-                                    .font(.caption).foregroundStyle(.green)
+                                Label("En ligne sur Discord · \(max(0, Int(end.timeIntervalSince(ctx.date)))) s", systemImage: "dot.radiowaves.left.and.right")
+                                    .foregroundStyle(.green)
+                                    .contentTransition(.numericText())
                             }
+                        } else {
+                            Button {
+                                engine.preview(rule)
+                            } label: {
+                                Label("Tester 10 s sur Discord", systemImage: "play.fill")
+                            }
+                            .nativeButtonStyle()
                         }
                     }
                 }
@@ -157,7 +210,8 @@ struct RuleEditor: View {
                 Section {
                     TextField("URL de l'image (https://…)", text: $rule.largeImageURL, prompt: Text("Automatique (icône, pochette, jaquette…)"))
                     if !rule.largeImageURL.isEmpty {
-                        RemoteImage(url: rule.largeImageURL).frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 8))
+                        RemoteImage(url: rule.largeImageURL).frame(width: 64, height: 64)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 } header: {
                     Text("Image")
@@ -208,21 +262,20 @@ struct ConditionsEditor: View {
         Section {
             Toggle("Seulement entre certaines heures", isOn: $conditions.useHours)
             if conditions.useHours {
-                HStack {
-                    DatePicker("De", selection: minuteBinding(\.fromMinute), displayedComponents: .hourAndMinute)
-                    DatePicker("à", selection: minuteBinding(\.toMinute), displayedComponents: .hourAndMinute)
-                }
+                DatePicker("De", selection: minuteBinding(\.fromMinute), displayedComponents: .hourAndMinute)
+                DatePicker("À", selection: minuteBinding(\.toMinute), displayedComponents: .hourAndMinute)
             }
-            HStack(spacing: 6) {
-                Text("Jours")
-                Spacer()
-                ForEach(Self.days, id: \.0) { day, label in
-                    let on = conditions.weekdays.contains(day)
-                    Button(label) {
-                        if on { conditions.weekdays.remove(day) } else { conditions.weekdays.insert(day) }
+            LabeledContent("Jours") {
+                HStack(spacing: 4) {
+                    ForEach(Self.days, id: \.0) { day, label in
+                        let on = conditions.weekdays.contains(day)
+                        Toggle(label, isOn: Binding(
+                            get: { on },
+                            set: { if $0 { conditions.weekdays.insert(day) } else { conditions.weekdays.remove(day) } }
+                        ))
+                        .toggleStyle(.button)
+                        .buttonBorderShape(.circle)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(on ? .accentColor : .secondary)
                 }
             }
             TextField("Le titre de la fenêtre contient…", text: $conditions.titleContains)

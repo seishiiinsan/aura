@@ -2,75 +2,57 @@ import AppKit
 import AuraKit
 import SwiftUI
 
-/// Live dashboard: what Aura broadcasts right now and what every source sees.
+/// Live dashboard: what Aura broadcasts right now, today's totals and every source.
 struct HomePane: View {
     @Environment(PresenceEngine.self) private var engine
     @Environment(SettingsStore.self) private var store
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                HStack(alignment: .top, spacing: 16) {
-                    PresenceCard(
-                        snapshot: engine.snapshot,
-                        appName: engine.snapshot.flatMap { engine.appInfo[$0.clientID]?.name },
-                        paused: store.settings.paused
-                    )
-                    .frame(maxWidth: 380)
-                    VStack(alignment: .leading, spacing: 10) {
-                        controls
+        Form {
+            Section {
+                PresenceCard(
+                    snapshot: engine.snapshot,
+                    appName: engine.snapshot.flatMap { engine.appInfo[$0.clientID]?.name },
+                    paused: store.settings.paused,
+                    chrome: .none
+                )
+                if let error = engine.lastError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                }
+                if store.settings.clientID.isEmpty {
+                    LabeledContent("Aucune application Discord configurée") {
+                        Button("Configurer…") { MainNavigation.shared.pane = .discord }
+                            .nativeButtonStyle(prominent: true)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            } header: {
+                Text("En direct sur Discord")
+            }
+
+            Section {
                 TodaySummary()
-                Text("Sources").font(.title3.bold())
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 14)], spacing: 14) {
-                    SourceTile(kind: .game, detail: gameDetail)
-                    SourceTile(kind: .music, detail: musicDetail)
-                    SourceTile(kind: .video, detail: engine.snapshot?.kind == .video ? engine.snapshot?.presence.details : nil)
-                    SourceTile(kind: .app, detail: engine.snapshot?.kind == .app ? engine.snapshot?.sourceApp : nil)
+            } header: {
+                HStack {
+                    Text("Aujourd'hui")
+                    Spacer()
+                    Button("Toutes les statistiques") { InsightsLauncher.open() }
+                        .buttonStyle(.link)
+                        .font(.callout)
                 }
             }
-            .padding(24)
-        }
-    }
 
-    private var header: some View {
-        HStack(spacing: 14) {
-            AuraLogo(size: 48)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Aura").font(.largeTitle.bold())
-                Text("Ta Rich Presence Discord, en direct").foregroundStyle(.secondary)
+            Section {
+                SourceRow(kind: .game, color: .green, detail: gameDetail)
+                SourceRow(kind: .music, color: .pink, detail: musicDetail)
+                SourceRow(kind: .video, color: .red, detail: engine.snapshot?.kind == .video ? engine.snapshot?.presence.details : nil)
+                SourceRow(kind: .app, color: .blue, detail: engine.snapshot?.kind == .app ? engine.snapshot?.sourceApp : nil)
+            } header: {
+                Text("Sources")
+            } footer: {
+                if let focus = engine.activeFocus {
+                    Label("Concentration « \(focus) » active", systemImage: "moon.fill")
+                }
             }
-            Spacer()
-            StatusPill(status: engine.status, hasClientID: !store.settings.clientID.isEmpty)
-        }
-    }
-
-    @ViewBuilder
-    private var controls: some View {
-        Toggle(isOn: Binding(get: { !store.settings.paused }, set: { store.settings.paused = !$0 })) {
-            Label("Diffusion active", systemImage: "dot.radiowaves.left.and.right")
-        }
-        .toggleStyle(.switch)
-        Picker(selection: Binding(
-            get: { store.settings.activeProfileID },
-            set: { id in if let p = store.settings.profiles.first(where: { $0.id == id }) { store.activate(p) } }
-        )) {
-            ForEach(store.settings.profiles) { Label($0.name, systemImage: $0.symbol).tag(Optional($0.id)) }
-        } label: {
-            Label("Profil", systemImage: "person.2.crop.square.stack")
-        }
-        if let focus = engine.activeFocus {
-            Label("Concentration : \(focus)", systemImage: "moon.fill").foregroundStyle(.indigo)
-        }
-        if let error = engine.lastError {
-            Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption)
-        }
-        HStack {
-            Button("Reconnecter") { engine.reconnect() }
-            Button("Insights") { InsightsLauncher.open() }
         }
     }
 
@@ -81,43 +63,79 @@ struct HomePane: View {
 
     private var musicDetail: String? {
         guard let np = engine.media.nowPlaying else { return nil }
-        return "\(np.title) — \(np.artist)" + (np.isPlaying ? "" : " (pause)")
+        return "\(np.title) — \(np.artist)" + (np.isPlaying ? "" : " (en pause)")
     }
 }
 
-struct SourceTile: View {
+/// A source with its live state and on/off switch.
+struct SourceRow: View {
     @Environment(PresenceEngine.self) private var engine
     @Environment(SettingsStore.self) private var store
     let kind: SourceKind
+    let color: Color
     let detail: String?
 
     var body: some View {
         let enabled = store.settings.isEnabled(kind)
-        let live = engine.snapshot?.kind == kind
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: kind.symbol).font(.title2).foregroundStyle(live ? Color.white : Color.accentColor)
-                Spacer()
-                if live { Text("EN DIRECT").font(.caption2.bold()).padding(.horizontal, 6).padding(.vertical, 2).background(.green, in: Capsule()) }
-                Toggle("", isOn: Binding(
-                    get: { enabled },
-                    set: { on in if on { store.settings.disabledSources.remove(kind) } else { store.settings.disabledSources.insert(kind) } }
-                ))
-                .labelsHidden().toggleStyle(.switch).controlSize(.mini)
+        let live = engine.snapshot?.kind == kind && !store.settings.paused
+        IconRow(symbol: kind.symbol, color: enabled ? color : .gray, title: kind.title,
+                subtitle: detail ?? (enabled ? "Rien de détecté" : "Désactivée")) {
+            if live {
+                Text("En direct")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.green.gradient, in: Capsule())
             }
-            Text(kind.title).font(.headline).foregroundStyle(live ? .white : .primary)
-            Text(detail ?? (enabled ? "Rien de détecté" : "Désactivé"))
-                .font(.callout).lineLimit(2)
-                .foregroundStyle(live ? .white.opacity(0.85) : .secondary)
+            Toggle("", isOn: Binding(
+                get: { enabled },
+                set: { on in if on { store.settings.disabledSources.remove(kind) } else { store.settings.disabledSources.insert(kind) } }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(live ? AnyShapeStyle(LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
-                           : AnyShapeStyle(.background.secondary))
-        )
-        .opacity(enabled ? 1 : 0.6)
+    }
+}
+
+/// Today's totals from the history, refreshed every minute.
+struct TodaySummary: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let interval = StatsPeriod.today.interval(now: context.date)
+            let stats = Stats(sessions: HistoryStore.shared.sessions(from: interval.start, to: interval.end), interval: interval)
+            let topApp = stats.top("app", limit: 1, label: { $0.name }).first
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    MiniStat(title: "Actif", value: Format.duration(stats.activeTime()), symbol: "bolt.fill", color: .purple)
+                    Divider()
+                    MiniStat(title: "Jeu", value: Format.duration(stats.total("game")), symbol: "gamecontroller.fill", color: .green)
+                    Divider()
+                    MiniStat(title: "Musique", value: Format.duration(stats.total("music")), symbol: "music.note", color: .pink)
+                    Divider()
+                    MiniStat(title: topApp?.label ?? "App n°1", value: Format.duration(topApp?.seconds ?? 0), symbol: "macwindow", color: .blue)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+struct MiniStat: View {
+    let title: String
+    let value: String
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).foregroundStyle(color).font(.callout)
+            Text(value)
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .contentTransition(.numericText())
+            Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -135,51 +153,10 @@ enum InsightsLauncher {
         guard let url = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             let alert = NSAlert()
             alert.messageText = "Aura Insights n'est pas installé"
-            alert.informativeText = "Lance scripts/build-app.sh --install pour installer Aura et Aura Insights."
+            alert.informativeText = "Installe Aura Insights depuis la dernière version sur GitHub, ou lance scripts/build-app.sh --install."
             alert.runModal()
             return
         }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-    }
-}
-
-/// Today's totals from the history, refreshed every minute.
-struct TodaySummary: View {
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
-            let interval = StatsPeriod.today.interval(now: context.date)
-            let stats = Stats(sessions: HistoryStore.shared.sessions(from: interval.start, to: interval.end), interval: interval)
-            let topApp = stats.top("app", limit: 1, label: { $0.name }).first
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Aujourd'hui").font(.title3.bold())
-                    Spacer()
-                    Button("Toutes les stats") { InsightsLauncher.open() }.buttonStyle(.link)
-                }
-                HStack(spacing: 12) {
-                    MiniStat(symbol: "bolt.fill", tint: .purple, title: "Actif", value: Format.duration(stats.activeTime()))
-                    MiniStat(symbol: "gamecontroller.fill", tint: .green, title: "Jeu", value: Format.duration(stats.total("game")))
-                    MiniStat(symbol: "music.note", tint: .pink, title: "Musique", value: Format.duration(stats.total("music")))
-                    MiniStat(symbol: "macwindow", tint: .blue, title: topApp?.label ?? "Top app", value: Format.duration(topApp?.seconds ?? 0))
-                }
-            }
-        }
-    }
-}
-
-struct MiniStat: View {
-    let symbol: String
-    let tint: Color
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(tint).lineLimit(1)
-            Text(value).font(.title3.bold().monospacedDigit())
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 12))
     }
 }
