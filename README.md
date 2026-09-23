@@ -1,6 +1,7 @@
 # Aura
 
 [![CI](https://github.com/seishiiinsan/aura/actions/workflows/ci.yml/badge.svg)](https://github.com/seishiiinsan/aura/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/seishiiinsan/aura?label=release&color=8a5cf6)](https://github.com/seishiiinsan/aura/releases/latest)
 
 Ta Rich Presence Discord, automatique et soignée, pour macOS — et **Aura Insights**, l'app qui transforme tout ce que tu fais en statistiques.
 
@@ -54,6 +55,14 @@ aura://clear   aura://open   aura://settings   aura://insights
 ```
 
 ## Installation
+
+### Télécharger
+
+**[⬇︎ Télécharger Aura.dmg](https://github.com/seishiiinsan/aura/releases/latest/download/Aura.dmg)** (macOS 15 ou plus récent), puis glisse **Aura** et **Aura Insights** dans Applications.
+
+La release n'étant pas notarisée, macOS bloque le premier lancement : clic droit → **Ouvrir**, ou Réglages Système → Confidentialité et sécurité → **Ouvrir quand même**. Les mises à jour suivantes s'installent depuis Aura → À propos.
+
+### Compiler depuis les sources
 
 Pas besoin de Xcode : les Command Line Tools suffisent.
 
