@@ -86,7 +86,7 @@ public extension View {
     /// Tab-style segmented picker on macOS 27, segmented before.
     @ViewBuilder
     func nativeTabsPickerStyle() -> some View {
-        #if compiler(>=6.3)
+        #if compiler(>=6.4) // macOS 27 SDK (Xcode 27) ships Swift 6.4
         if #available(macOS 27, *) {
             self.pickerStyle(.tabs)
         } else {
