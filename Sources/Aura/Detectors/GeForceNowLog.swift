@@ -33,6 +33,11 @@ enum GeForceNowLog {
         guard let data = try? handle.readToEnd(), let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
             return nil
         }
+        return session(fromLog: text)
+    }
+
+    /// Parses the log text; the last start without a later stop is the running session.
+    static func session(fromLog text: String) -> Session? {
         var session: Session?
         for line in text.split(separator: "\n") {
             if line.contains("onStreamStart"), let range = line.range(of: "drsAppName:") {

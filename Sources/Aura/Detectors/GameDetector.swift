@@ -204,7 +204,7 @@ final class GameDetector {
         return game
     }
 
-    static let cloudPlatforms: [String: String] = [
+    nonisolated static let cloudPlatforms: [String: String] = [
         "com.nvidia.gfnpc.mall": "GeForce NOW",
         "com.nvidia.geforcenow": "GeForce NOW",
         "com.blade.shadow-macos": "Shadow",
@@ -213,7 +213,7 @@ final class GameDetector {
 
     /// Extracts the game name from a streaming client's window title
     /// ("Cyberpunk 2077 on GeForce NOW", "GeForce NOW - Fortnite"…).
-    static func cloudGameName(fromTitle title: String, platform: String) -> String? {
+    nonisolated static func cloudGameName(fromTitle title: String, platform: String) -> String? {
         var t = title
         for noise in ["NVIDIA GeForce NOW", "GeForce NOW", platform, " on ", " sur ", "®", "™"] {
             t = t.replacingOccurrences(of: noise, with: " ", options: .caseInsensitive)
@@ -223,7 +223,7 @@ final class GameDetector {
     }
 
     /// Detects cloud gaming sessions running in a browser tab.
-    static func browserCloudGame(url: String, title: String) -> (name: String, platform: String)? {
+    nonisolated static func browserCloudGame(url: String, title: String) -> (name: String, platform: String)? {
         guard let u = URL(string: url) else { return nil }
         let host = SiteCatalog.host(of: u)
         let path = u.pathComponents.filter { $0 != "/" }

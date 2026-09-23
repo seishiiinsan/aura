@@ -391,7 +391,7 @@ final class PresenceEngine {
     }
 
     /// Discord application IDs are 17–20 digit snowflakes; anything else is ignored.
-    static func isValidClientID(_ id: String) -> Bool {
+    nonisolated static func isValidClientID(_ id: String) -> Bool {
         (17...20).contains(id.count) && id.allSatisfy(\.isNumber)
     }
 

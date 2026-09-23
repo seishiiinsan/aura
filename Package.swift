@@ -30,5 +30,11 @@ let package = Package(
             path: "Sources/AuraInsights",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "AuraTests",
+            dependencies: ["Aura", "AuraKit"],
+            path: "Tests/AuraTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
     ]
 )
