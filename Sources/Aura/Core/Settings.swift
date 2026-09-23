@@ -110,6 +110,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var language: PresenceLanguage = .fr
     var showWindowTitles = true
     var showBrowserPageTitles = false
+    var readStreamingDetails = false
     var showElapsedTime = true
     var showMusicProgress = true
     var showButtons = true
@@ -150,6 +151,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         language = v(.language, d.language)
         showWindowTitles = v(.showWindowTitles, d.showWindowTitles)
         showBrowserPageTitles = v(.showBrowserPageTitles, d.showBrowserPageTitles)
+        readStreamingDetails = v(.readStreamingDetails, d.readStreamingDetails)
         showElapsedTime = v(.showElapsedTime, d.showElapsedTime)
         showMusicProgress = v(.showMusicProgress, d.showMusicProgress)
         showButtons = v(.showButtons, d.showButtons)
