@@ -49,7 +49,7 @@ struct PresenceStrings: Sendable {
 
 /// Minimal `{placeholder}` renderer used by user-defined rules.
 enum Template {
-    static let variables = ["app", "title", "file", "project", "site", "track", "artist", "album", "game"]
+    static let variables = ["app", "title", "file", "project", "site", "track", "artist", "album", "game", "status"]
 
     static func render(_ template: String, _ values: [String: String]) -> String {
         var out = template
