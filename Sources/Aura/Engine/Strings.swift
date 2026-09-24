@@ -31,6 +31,8 @@ struct PresenceStrings: Sendable {
     func paused() -> String { t("En pause", "Paused") }
     func playing() -> String { t("En lecture", "Playing") }
     func inGame() -> String { t("En jeu", "In game") }
+    func score(_ a: Int, _ b: Int) -> String { "\(a) – \(b)" }
+    func inMenus() -> String { t("Dans les menus", "In menus") }
     func via(_ platform: String) -> String { t("via \(platform)", "via \(platform)") }
     func away() -> String { t("Absent", "Away") }
     func awaySince() -> String { t("Inactif depuis un moment", "Idle for a while") }
@@ -49,7 +51,7 @@ struct PresenceStrings: Sendable {
 
 /// Minimal `{placeholder}` renderer used by user-defined rules.
 enum Template {
-    static let variables = ["app", "title", "file", "project", "site", "track", "artist", "album", "game", "status", "language", "branch"]
+    static let variables = ["app", "title", "file", "project", "site", "track", "artist", "album", "game", "status", "mode", "map", "score", "language", "branch"]
 
     static func render(_ template: String, _ values: [String: String]) -> String {
         var out = template
