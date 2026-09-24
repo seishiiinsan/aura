@@ -96,7 +96,10 @@ struct ParsingTests {
               <option name="activationTimestamp" value="1790200000000" /></RecentProjectMetaInfo></value></entry>
         </map></option></component></application>
         """
-        let p = JetBrainsInspector.parse(xml: xml, home: "/Users/me")
+        // Two projects open: the file can't tell which window is in front.
+        #expect(JetBrainsInspector.parse(xml: xml, home: "/Users/me") == nil)
+        let single = xml.replacingOccurrences(of: #"frameTitle="aura" opened="true""#, with: #"frameTitle="aura""#)
+        let p = JetBrainsInspector.parse(xml: single, home: "/Users/me")
         #expect(p?.name == "portfolio")
         #expect(p?.path == "/Users/me/WebstormProjects/portfolio")
         #expect(p?.frameTitle == "portfolio – next-env.d.ts")

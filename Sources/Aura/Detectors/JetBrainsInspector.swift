@@ -48,8 +48,10 @@ enum JetBrainsInspector {
         (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
 
-    /// Picks the open project with the latest `activationTimestamp`.
+    /// The open project, only when exactly one is open: the file isn't updated on every
+    /// window switch, so with several windows it can't tell which one is in front.
     static func parse(xml: String, home: String) -> Project? {
+        var opened = 0
         var best: (Project, Int64)?
         let entries = xml.components(separatedBy: "<entry key=\"").dropFirst()
         for entry in entries {
@@ -60,9 +62,10 @@ enum JetBrainsInspector {
             let path = rawPath.replacingOccurrences(of: "$USER_HOME$", with: home)
             let title = attribute("frameTitle", in: entry).map(unescape)
             let project = Project(path: path, name: (path as NSString).lastPathComponent, frameTitle: title)
+            opened += 1
             if best == nil || stamp > best!.1 { best = (project, stamp) }
         }
-        return best?.0
+        return opened == 1 ? best?.0 : nil
     }
 
     private static func value(of option: String, in text: String) -> String? {
