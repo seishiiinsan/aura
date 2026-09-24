@@ -86,4 +86,12 @@ struct PresenceTests {
         #expect(s.showWindowTitles == false)
         #expect(s.activeProfileID == discreet.id)
     }
+
+    @Test func codeSourceMigration() {
+        #expect(SourceKind.normalized([.game, .video, .music, .app]) == [.game, .video, .music, .code, .app])
+        #expect(SourceKind.normalized([.app, .music]) == [.code, .app, .music, .game, .video])
+        #expect(AppCatalog.isCode(AppCatalog.category(for: "com.jetbrains.WebStorm")))
+        #expect(AppCatalog.isCode(AppCatalog.category(for: "com.apple.Terminal")))
+        #expect(!AppCatalog.isCode(AppCatalog.category(for: "com.hnc.Discord")))
+    }
 }

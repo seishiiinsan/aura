@@ -5,15 +5,28 @@ import OSLog
 
 /// The kinds of activity Aura can broadcast, ordered by user priority.
 enum SourceKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case game, video, music, app
+    case game, video, music, code, app
 
     var id: String { rawValue }
+
+    /// Adds kinds missing from an older priority list; `code` goes right before `app`.
+    /// Sources describing the frontmost app (they give way to the idle state).
+    var isFocusedApp: Bool { self == .app || self == .code }
+
+    static func normalized(_ list: [SourceKind]) -> [SourceKind] {
+        var out = list.filter { SourceKind.allCases.contains($0) }
+        for kind in SourceKind.allCases where !out.contains(kind) {
+            if kind == .code, let i = out.firstIndex(of: .app) { out.insert(.code, at: i) } else { out.append(kind) }
+        }
+        return out
+    }
 
     var title: String {
         switch self {
         case .game: "Jeux"
         case .video: "Vidéos & streams"
         case .music: "Musique"
+        case .code: "Code"
         case .app: "App au premier plan"
         }
     }
@@ -23,6 +36,7 @@ enum SourceKind: String, Codable, CaseIterable, Identifiable, Sendable {
         case .game: "gamecontroller.fill"
         case .video: "play.tv.fill"
         case .music: "music.note"
+        case .code: "chevron.left.forwardslash.chevron.right"
         case .app: "macwindow"
         }
     }
@@ -157,7 +171,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var preferAnimatedArtwork = false
 
     // Sources
-    var priority: [SourceKind] = [.game, .video, .music, .app]
+    var priority: [SourceKind] = [.game, .video, .music, .code, .app]
     var disabledSources: Set<SourceKind> = []
     var musicShowPaused = false
     var musicOtherPlayers = true
@@ -214,8 +228,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         useOfficialGameIdentity = v(.useOfficialGameIdentity, d.useOfficialGameIdentity)
         steamAccount = v(.steamAccount, d.steamAccount)
         preferAnimatedArtwork = v(.preferAnimatedArtwork, d.preferAnimatedArtwork)
-        priority = v(.priority, d.priority)
-        for kind in SourceKind.allCases where !priority.contains(kind) { priority.append(kind) }
+        priority = SourceKind.normalized(v(.priority, d.priority))
         disabledSources = v(.disabledSources, d.disabledSources)
         musicShowPaused = v(.musicShowPaused, d.musicShowPaused)
         musicOtherPlayers = v(.musicOtherPlayers, d.musicOtherPlayers)
