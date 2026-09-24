@@ -4,14 +4,18 @@ enum HTTP {
     static let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 10
-        config.requestCachePolicy = .returnCacheDataElseLoad
+        // Follow the servers' cache headers; live endpoints additionally pass `fresh: true`.
+        config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 8 << 20, diskCapacity: 64 << 20)
         config.httpAdditionalHeaders = ["User-Agent": "Aura/1.0 (macOS; Discord Rich Presence)"]
         return URLSession(configuration: config)
     }()
 
-    static func json(_ url: URL) async -> Any? {
-        guard let (data, response) = try? await session.data(from: url),
+    /// `fresh` bypasses every cache: use it for live state (what you're playing, latest release…).
+    static func json(_ url: URL, fresh: Bool = false) async -> Any? {
+        var request = URLRequest(url: url)
+        if fresh { request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData }
+        guard let (data, response) = try? await session.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
     }

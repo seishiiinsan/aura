@@ -49,7 +49,7 @@ final class Updater {
         phase = .checking
         lastCheck = Date()
         guard let url = URL(string: "https://api.github.com/repos/\(Self.repository)/releases/latest"),
-              let json = await HTTP.json(url) as? [String: Any],
+              let json = await HTTP.json(url, fresh: true) as? [String: Any],
               let tag = json["tag_name"] as? String,
               let page = (json["html_url"] as? String).flatMap(URL.init(string:)) else {
             phase = .failed("Impossible de joindre GitHub")
