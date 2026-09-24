@@ -41,8 +41,6 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Aura lit le morceau en cours dans Spotify et Musique, et l'onglet actif de ton navigateur, pour les afficher dans ta présence Discord.</string>
-	<key>NSScreenCaptureUsageDescription</key>
-	<string>Aura lit le score affiché en haut de l'écran de Counter-Strike 2 sur GeForce NOW pour l'afficher en direct sur Discord. Seule cette zone est analysée, sur ton Mac.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
