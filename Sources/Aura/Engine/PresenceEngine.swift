@@ -161,7 +161,9 @@ final class PresenceEngine {
         tickCount += 1
         // Wine games don't post NSWorkspace launch notifications: rescan every 15 s.
         if tickCount % 5 == 0 { Task { await rescanGames() } }
-        if tickCount % 10 == 1 { Task { await refreshSteam() } }
+        // Steam is polled every 15 s during a game (live mode / map / score), 30 s otherwise.
+        let gaming = snapshot?.kind == .game || !runningGames.isEmpty
+        if tickCount % (gaming ? 5 : 10) == 1 { Task { await refreshSteam() } }
         if tickCount % 2 == 0 { checkFocus() }
         // GeForce NOW (and other launchers) publish their own, image-less Discord activity;
         // Discord shows the most recent one, so Aura re-asserts its presence regularly while they run.
@@ -248,6 +250,7 @@ final class PresenceEngine {
     }
 
     func refreshSteam() async {
+        await SteamWebPresence.shared.setLanguage(store.settings.language.rawValue)
         let account = store.settings.steamAccount
         guard !account.isEmpty, let key = Keychain.get(SecretKey.steamAPI), !key.isEmpty else {
             if steamStatus != nil { steamStatus = nil; scheduleRecompute() }
@@ -451,22 +454,33 @@ final class PresenceEngine {
             game.discordIconURL = entry.iconURL
         }
         let inLauncher = game.isCloud && game.name == game.platform
-        let steamRich = steamStatus.flatMap { $0.appID == game.steamAppID ? $0.richPresence : nil }
+        // Steam status of this game — matched by app id, or by name for cloud games (GeForce NOW
+        // runs Steam with your account on its servers, so Steam knows the mode, map and score).
+        let steam = steamStatus.flatMap { status -> SteamStatus? in
+            if let id = game.steamAppID { return status.appID == id ? status : nil }
+            return DetectableGames.normalize(status.gameName) == DetectableGames.normalize(game.name) ? status : nil
+        }
+        if game.steamAppID == nil, let steam { game.steamAppID = steam.appID }
+        let steamRich = steam?.richPresence
+        let match = steam?.match
+        // "Compétitif · Mirage" and "7 – 4 · via GeForce NOW" when a score is known.
+        let matchLine = match.map { m in [m.mode, m.map].compactMap { $0 }.joined(separator: " · ") }
+        let scoreLine = match?.score.map { sc in [t.score(sc.0, sc.1), game.platform.map(t.via)].compactMap { $0 }.joined(separator: " · ") }
 
         let official = s.useOfficialGameIdentity ? game.discordAppID : nil
         var p = RichPresence(type: .playing)
         if official != nil {
             p.statusDisplay = .name
-            p.details = steamRich ?? t.inGame()
-            p.state = game.platform.map(t.via)
+            p.details = matchLine ?? steamRich ?? t.inGame()
+            p.state = scoreLine ?? game.platform.map(t.via)
         } else if inLauncher {
             p.statusDisplay = .details
             p.details = game.name
             p.state = t.inLibrary(game.name)
         } else {
             p.statusDisplay = .details
-            p.details = game.name
-            p.state = steamRich ?? game.platform.map(t.via) ?? t.inGame()
+            p.details = matchLine.map { "\(game.name) · \($0)" } ?? game.name
+            p.state = scoreLine ?? steamRich ?? game.platform.map(t.via) ?? t.inGame()
         }
         p.largeImage = await ArtworkService.shared.gameCover(game)
         p.largeText = game.name
@@ -493,7 +507,12 @@ final class PresenceEngine {
         }
         var client = clientID(s.gameClientID, s)
         if let official { client = official }
-        let gameVars = ["app": game.platform ?? game.name, "game": game.name, "status": steamRich ?? ""]
+        var gameVars = ["app": game.platform ?? game.name, "game": game.name, "status": steamRich ?? ""]
+        if let match {
+            gameVars["mode"] = match.mode
+            gameVars["map"] = match.map ?? ""
+            gameVars["score"] = match.score.map { t.score($0.0, $0.1) } ?? ""
+        }
         apply(rule, to: &p, clientID: &client, vars: gameVars)
         var meta = gameVars
         meta["platform"] = game.platform ?? "macOS"

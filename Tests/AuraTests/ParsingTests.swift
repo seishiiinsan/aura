@@ -81,4 +81,25 @@ struct ParsingTests {
         #expect(session?.start != nil)
         #expect(GeForceNowLog.session(fromLog: log + "\n2026-09-23T22:00:00.000[I] onStreamStop processId:1") == nil)
     }
+
+    @Test func steamMatchStatus() {
+        let cs = MatchStatus.parse("Competitive - Mirage [ 7 : 4 ]")
+        #expect(cs?.mode == "Competitive")
+        #expect(cs?.map == "Mirage")
+        #expect(cs?.score?.0 == 7 && cs?.score?.1 == 4)
+
+        let fr = MatchStatus.parse("Compétitif - Dust II [ 12 : 10 ]")
+        #expect(fr?.map == "Dust II")
+        #expect(fr?.score?.0 == 12)
+
+        let dm = MatchStatus.parse("Deathmatch - Inferno")
+        #expect(dm?.mode == "Deathmatch")
+        #expect(dm?.score == nil)
+
+        let menu = MatchStatus.parse("Dans le menu principal")
+        #expect(menu?.mode == "Dans le menu principal")
+        #expect(menu?.map == nil)
+
+        #expect(MatchStatus.parse("   ") == nil)
+    }
 }

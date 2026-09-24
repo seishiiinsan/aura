@@ -46,7 +46,7 @@ struct ServicesPane: View {
             }
             Section {
                 IconRow(symbol: "gamecontroller.fill", color: .gray, title: "Steam",
-                        subtitle: "Statut détaillé et parties sur Steam Deck ou PC.") {
+                        subtitle: "Mode, carte et score en direct, même via GeForce NOW.") {
                     StatusBadge(on: engine.steamStatus != nil, onText: "En jeu", offText: steamKey.isEmpty ? "Désactivé" : "Connecté")
                 }
                 TextField("Compte", text: $store.settings.steamAccount, prompt: Text("SteamID64 ou nom de profil"))
@@ -64,7 +64,7 @@ struct ServicesPane: View {
                     Link("Obtenir une clé API Steam", destination: URL(string: "https://steamcommunity.com/dev/apikey")!)
                 }
             } footer: {
-                Text("Ton profil Steam doit être public.")
+                Text("Donne le mode, la carte et le score en direct (CS2, Dota 2…), y compris pour les jeux lancés via GeForce NOW. Ton profil Steam et le détail de tes jeux doivent être publics.")
             }
         }
     }
