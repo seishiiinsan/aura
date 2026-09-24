@@ -167,6 +167,11 @@ enum AppCatalog {
         return prefixes.first { bundleID.hasPrefix($0.0) }?.1
     }
 
+    /// Categories belonging to the Code source (editors, IDEs, dev tools, terminals).
+    static func isCode(_ category: AppCategory) -> Bool {
+        category == .coding || category == .terminal
+    }
+
     static func category(for bundleID: String?) -> AppCategory {
         info(for: bundleID)?.category ?? .other
     }

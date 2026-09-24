@@ -192,7 +192,7 @@ final class PresenceEngine {
         } else {
             focused = nil
         }
-        if BrowserInspector.supports(bundleID), settings.isEnabled(.video) || settings.isEnabled(.app) {
+        if BrowserInspector.supports(bundleID), settings.isEnabled(.video) || settings.isEnabled(.app) || settings.isEnabled(.code) {
             browserTab = await BrowserInspector.activeTab(bundleID: bundleID, appName: app.localizedName ?? bundleID)
             if settings.readStreamingDetails, let tab = browserTab, let site = SiteCatalog.analyze(tab.url),
                case .streaming = site.kind {
@@ -342,9 +342,12 @@ final class PresenceEngine {
         for (kind, d) in drafts {
             if kind == .music, d.meta["paused"] == "1" { continue } // paused music isn't listening time
             if kind == .game, d.meta["launcher"] == "1" { continue }
-            if kind == .app, isIdle { continue }
-            observations[kind.rawValue] = ActivityObservation(
-                kind: kind.rawValue, name: d.sourceApp, bundleID: d.sourceBundleID,
+            if kind.isFocusedApp, isIdle { continue }
+            // Code is the frontmost app too: it is stored with the apps (category "coding"),
+            // which is how Aura Insights builds its Code statistics.
+            let stored = kind == .code ? SourceKind.app.rawValue : kind.rawValue
+            observations[stored] = ActivityObservation(
+                kind: stored, name: d.sourceApp, bundleID: d.sourceBundleID,
                 details: d.presence.details, state: d.presence.state, image: d.presence.largeImage, meta: d.meta
             )
         }
@@ -380,7 +383,8 @@ final class PresenceEngine {
             case .game: draft = await gameDraft(s, strings)
             case .video: draft = await videoDraft(s, strings)
             case .music: draft = await musicDraft(s, strings)
-            case .app: draft = await appDraft(s, strings)
+            case .code: draft = await appDraft(s, strings, code: true)
+            case .app: draft = await appDraft(s, strings, code: false)
             }
             drafts[kind] = draft
         }
@@ -388,7 +392,7 @@ final class PresenceEngine {
         for kind in s.priority where s.isEnabled(kind) {
             if var draft = drafts[kind] {
                 // Apps & websites give way to the idle state; games, music and videos don't.
-                if (kind == .app) && isIdle { draft = idleDraft(s, strings) }
+                if kind.isFocusedApp && isIdle { draft = idleDraft(s, strings) }
                 return draft
             }
         }
@@ -670,14 +674,17 @@ final class PresenceEngine {
 
     // MARK: Focused app
 
-    private func appDraft(_ s: AuraSettings, _ t: PresenceStrings) async -> PresenceSnapshot? {
+    /// The frontmost app. `code: true` only accepts editors, IDEs, terminals and dev tools
+    /// (the Code source); `code: false` accepts every other app (the Apps source).
+    private func appDraft(_ s: AuraSettings, _ t: PresenceStrings, code: Bool) async -> PresenceSnapshot? {
         guard let app = frontApp else { return nil }
         let bundleID = app.bundleIdentifier
         if let bundleID, AppCatalog.ignored.contains(bundleID) { return nil }
+        let category = AppCatalog.category(for: bundleID)
+        guard AppCatalog.isCode(category) == code else { return nil }
         let rule = s.rule(for: bundleID, title: focused?.title ?? browserTab?.title)
         if rule?.mode == .hide { return nil }
         let name = app.localizedName ?? bundleID ?? "App"
-        let category = AppCatalog.category(for: bundleID)
         let title = s.showWindowTitles ? focused?.title : nil
         var vars = ["app": name, "title": title ?? ""]
 
@@ -784,7 +791,7 @@ final class PresenceEngine {
         }
         apply(rule, to: &p, clientID: &client, vars: vars)
         vars["category"] = category.rawValue
-        return PresenceSnapshot(kind: .app, sourceApp: name, sourceBundleID: bundleID, clientID: client, presence: p, meta: vars)
+        return PresenceSnapshot(kind: code ? .code : .app, sourceApp: name, sourceBundleID: bundleID, clientID: client, presence: p, meta: vars)
     }
 
     private func idleDraft(_ s: AuraSettings, _ t: PresenceStrings) -> PresenceSnapshot {

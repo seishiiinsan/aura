@@ -15,19 +15,19 @@ struct PresenceProfile: Codable, Identifiable, Hashable, Sendable {
     var paused: Bool
 
     static let presets: [PresenceProfile] = [
-        PresenceProfile(name: "Normal", symbol: "sparkles", priority: [.game, .video, .music, .app], disabledSources: [],
+        PresenceProfile(name: "Normal", symbol: "sparkles", priority: [.game, .video, .music, .code, .app], disabledSources: [],
                         showWindowTitles: true, showBrowserPageTitles: false, showButtons: true, showElapsedTime: true,
                         showGitBranch: true, paused: false),
-        PresenceProfile(name: "Discret", symbol: "eye.slash", priority: [.game, .music, .video, .app], disabledSources: [],
+        PresenceProfile(name: "Discret", symbol: "eye.slash", priority: [.game, .music, .video, .code, .app], disabledSources: [],
                         showWindowTitles: false, showBrowserPageTitles: false, showButtons: false, showElapsedTime: false,
                         showGitBranch: false, paused: false),
-        PresenceProfile(name: "Streaming", symbol: "dot.radiowaves.left.and.right", priority: [.game, .video, .music, .app],
+        PresenceProfile(name: "Streaming", symbol: "dot.radiowaves.left.and.right", priority: [.game, .video, .music, .code, .app],
                         disabledSources: [.app], showWindowTitles: false, showBrowserPageTitles: false, showButtons: true,
                         showElapsedTime: true, showGitBranch: false, paused: false),
-        PresenceProfile(name: "Travail", symbol: "briefcase", priority: [.app, .music, .video, .game], disabledSources: [.game, .video],
+        PresenceProfile(name: "Travail", symbol: "briefcase", priority: [.code, .app, .music, .video, .game], disabledSources: [.game, .video],
                         showWindowTitles: true, showBrowserPageTitles: false, showButtons: false, showElapsedTime: true,
                         showGitBranch: true, paused: false),
-        PresenceProfile(name: "Invisible", symbol: "moon.zzz", priority: [.game, .video, .music, .app], disabledSources: [],
+        PresenceProfile(name: "Invisible", symbol: "moon.zzz", priority: [.game, .video, .music, .code, .app], disabledSources: [],
                         showWindowTitles: false, showBrowserPageTitles: false, showButtons: false, showElapsedTime: false,
                         showGitBranch: false, paused: true),
     ]
@@ -49,7 +49,7 @@ struct PresenceProfile: Codable, Identifiable, Hashable, Sendable {
     }
 
     func apply(to s: inout AuraSettings) {
-        s.priority = priority
+        s.priority = SourceKind.normalized(priority)
         s.disabledSources = disabledSources
         s.showWindowTitles = showWindowTitles
         s.showBrowserPageTitles = showBrowserPageTitles

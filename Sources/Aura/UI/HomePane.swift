@@ -45,6 +45,7 @@ struct HomePane: View {
                 SourceRow(kind: .game, color: .green, detail: gameDetail)
                 SourceRow(kind: .music, color: .pink, detail: musicDetail)
                 SourceRow(kind: .video, color: .red, detail: engine.snapshot?.kind == .video ? engine.snapshot?.presence.details : nil)
+                SourceRow(kind: .code, color: .indigo, detail: engine.snapshot?.kind == .code ? engine.snapshot?.presence.details : nil)
                 SourceRow(kind: .app, color: .blue, detail: engine.snapshot?.kind == .app ? engine.snapshot?.sourceApp : nil)
             } header: {
                 Text("Sources")

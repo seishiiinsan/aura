@@ -456,6 +456,7 @@ struct SourcesPane: View {
         case .game: .green
         case .video: .red
         case .music: .pink
+        case .code: .indigo
         case .app: .blue
         }
     }
@@ -523,20 +524,27 @@ struct SourcesPane: View {
                 }
             }
 
-            Section("App au premier plan") {
+            Section {
                 Toggle("Noms de fichiers et de projets", isOn: $store.settings.showWindowTitles)
                 Toggle("Branche git", isOn: $store.settings.showGitBranch)
                 Toggle("Bouton « Voir sur GitHub »", isOn: $store.settings.showRepoButton)
-                Toggle("Lire les titres de fenêtres", isOn: $store.settings.readWindowTitlesWithAccessibility)
-                    .onChange(of: store.settings.readWindowTitlesWithAccessibility) { _, on in
-                        if on && !WindowInspector.isTrusted { WindowInspector.requestAccess() }
-                    }
                 TextField("Dossiers de projets", text: Binding(
                     get: { store.settings.projectRoots.joined(separator: ", ") },
                     set: { store.settings.projectRoots = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
                 ))
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(.secondary)
+            } header: {
+                Text("Code")
+            } footer: {
+                Text("Éditeurs et IDE (Xcode, VS Code, Cursor, Zed, JetBrains…), terminaux et outils de dev forment la source Code, séparée des autres apps.")
+            }
+
+            Section("App au premier plan") {
+                Toggle("Lire les titres de fenêtres", isOn: $store.settings.readWindowTitlesWithAccessibility)
+                    .onChange(of: store.settings.readWindowTitlesWithAccessibility) { _, on in
+                        if on && !WindowInspector.isTrusted { WindowInspector.requestAccess() }
+                    }
             }
         }
     }

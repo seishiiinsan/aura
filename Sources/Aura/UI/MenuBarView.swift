@@ -133,6 +133,7 @@ struct MenuBarView: View {
         case .game: .green
         case .video: .red
         case .music: .pink
+        case .code: .indigo
         case .app: .blue
         }
     }
@@ -142,6 +143,7 @@ struct MenuBarView: View {
         case .game: "Jeux"
         case .video: "Vidéos"
         case .music: "Musique"
+        case .code: "Code"
         case .app: "Apps"
         }
     }
