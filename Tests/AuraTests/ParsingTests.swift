@@ -81,4 +81,27 @@ struct ParsingTests {
         #expect(session?.start != nil)
         #expect(GeForceNowLog.session(fromLog: log + "\n2026-09-23T22:00:00.000[I] onStreamStop processId:1") == nil)
     }
+
+    @Test func jetBrainsRecentProjects() {
+        let xml = """
+        <application><component name="RecentProjectsManager"><option name="additionalInfo"><map>
+        <entry key="$USER_HOME$/WebstormProjects/onbo">
+            <value><RecentProjectMetaInfo frameTitle="onbo – .env" projectWorkspaceId="a">
+              <option name="activationTimestamp" value="1790161954516" /></RecentProjectMetaInfo></value></entry>
+        <entry key="$USER_HOME$/WebstormProjects/portfolio">
+            <value><RecentProjectMetaInfo frameTitle="portfolio – next-env.d.ts" opened="true" projectWorkspaceId="b">
+              <option name="activationTimestamp" value="1790282704602" /></RecentProjectMetaInfo></value></entry>
+        <entry key="$USER_HOME$/WebstormProjects/aura">
+            <value><RecentProjectMetaInfo frameTitle="aura" opened="true" projectWorkspaceId="c">
+              <option name="activationTimestamp" value="1790200000000" /></RecentProjectMetaInfo></value></entry>
+        </map></option></component></application>
+        """
+        let p = JetBrainsInspector.parse(xml: xml, home: "/Users/me")
+        #expect(p?.name == "portfolio")
+        #expect(p?.path == "/Users/me/WebstormProjects/portfolio")
+        #expect(p?.frameTitle == "portfolio – next-env.d.ts")
+        let parsed = WindowTitleParser.editor(title: p!.frameTitle!, appName: "WebStorm", bundleID: "com.jetbrains.WebStorm")
+        #expect(parsed.file == "next-env.d.ts")
+        #expect(Languages.language(forFile: "next-env.d.ts")?.name == "TypeScript")
+    }
 }
