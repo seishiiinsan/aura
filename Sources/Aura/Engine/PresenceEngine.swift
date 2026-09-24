@@ -39,11 +39,6 @@ final class PresenceEngine {
     private(set) var runningGames: [DetectedGame] = []
     private(set) var lastSentAt: Date?
     private(set) var steamStatus: SteamStatus?
-    /// Score read from the game's HUD on screen (CS2 on GeForce NOW).
-    private(set) var liveScore: LiveScore?
-    @ObservationIgnored private var liveScoreGame: String?
-    /// Whether the on-screen left/right order is the reverse of "your team first" (learned from Steam).
-    @ObservationIgnored private var scoreSwapped: Bool?
     private(set) var activeFocus: String?
     @ObservationIgnored private var focusChecked = false
     /// Temporary presence set from a Shortcut / URL / rule preview; wins over every source.
@@ -169,7 +164,6 @@ final class PresenceEngine {
         // Steam is polled every 15 s during a game (live mode / map / score), 30 s otherwise.
         let gaming = snapshot?.kind == .game || !runningGames.isEmpty
         if tickCount % (gaming ? 5 : 10) == 1 { Task { await refreshSteam() } }
-        Task { await refreshLiveScore() }
         if tickCount % 2 == 0 { checkFocus() }
         // GeForce NOW (and other launchers) publish their own, image-less Discord activity;
         // Discord shows the most recent one, so Aura re-asserts its presence regularly while they run.
@@ -253,41 +247,6 @@ final class PresenceEngine {
         } else if focus == nil, !s.noFocusProfile.isEmpty {
             store.activateProfile(named: s.noFocusProfile)
         }
-    }
-
-    /// Reads the score from the HUD every tick while a supported game streams on GeForce NOW.
-    func refreshLiveScore() async {
-        guard store.settings.liveScoreFromScreen, ScreenScoreReader.hasPermission,
-              let snap = snapshot, snap.kind == .game,
-              let bundleID = snap.sourceBundleID, GameDetector.cloudPlatforms[bundleID] != nil,
-              ScreenScoreReader.supports(game: snap.sourceApp) else {
-            if liveScore != nil { liveScore = nil; scoreSwapped = nil; await ScreenScoreReader.shared.reset() }
-            return
-        }
-        if liveScoreGame != snap.sourceApp {
-            liveScoreGame = snap.sourceApp
-            scoreSwapped = nil
-            await ScreenScoreReader.shared.reset()
-        }
-        let score = await ScreenScoreReader.shared.read(bundleID: bundleID)
-        if score?.left != liveScore?.left || score?.right != liveScore?.right {
-            liveScore = score
-            scoreRecompute()
-        } else {
-            liveScore = score
-        }
-    }
-
-    private func scoreRecompute() { scheduleRecompute() }
-
-    /// Score with your team first: the HUD's left/right order is matched against Steam's score once.
-    private func orientedLiveScore(steam: (Int, Int)?) -> (Int, Int)? {
-        guard let live = liveScore, Date().timeIntervalSince(live.readAt) < 90 else { return nil }
-        if scoreSwapped == nil, let (x, y) = steam, x != y {
-            if live.left == x || live.right == y { scoreSwapped = false }
-            else if live.left == y || live.right == x { scoreSwapped = true }
-        }
-        return scoreSwapped == true ? (live.right, live.left) : (live.left, live.right)
     }
 
     func refreshSteam() async {
@@ -506,9 +465,7 @@ final class PresenceEngine {
         let match = steam?.match
         // "Compétitif · Mirage" and "7 – 4 · via GeForce NOW" when a score is known.
         let matchLine = match.map { m in [m.mode, m.map].compactMap { $0 }.joined(separator: " · ") }
-        // The on-screen score is live; Steam's lags behind and is only the fallback.
-        let bestScore = ScreenScoreReader.supports(game: game.name) ? (orientedLiveScore(steam: match?.score) ?? match?.score) : match?.score
-        let scoreLine = bestScore.map { sc in [t.score(sc.0, sc.1), game.platform.map(t.via)].compactMap { $0 }.joined(separator: " · ") }
+        let scoreLine = match?.score.map { sc in [t.score(sc.0, sc.1), game.platform.map(t.via)].compactMap { $0 }.joined(separator: " · ") }
 
         let official = s.useOfficialGameIdentity ? game.discordAppID : nil
         var p = RichPresence(type: .playing)
@@ -554,7 +511,7 @@ final class PresenceEngine {
         if let match {
             gameVars["mode"] = match.mode
             gameVars["map"] = match.map ?? ""
-            gameVars["score"] = bestScore.map { t.score($0.0, $0.1) } ?? ""
+            gameVars["score"] = match.score.map { t.score($0.0, $0.1) } ?? ""
         }
         apply(rule, to: &p, clientID: &client, vars: gameVars)
         var meta = gameVars
