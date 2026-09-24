@@ -154,6 +154,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
     var codingClientID: String = ""
     var useOfficialGameIdentity = true
     var steamAccount = ""
+    var liveScoreFromScreen = true
     var preferAnimatedArtwork = false
 
     // Sources
@@ -213,6 +214,7 @@ struct AuraSettings: Codable, Equatable, Sendable {
         codingClientID = v(.codingClientID, d.codingClientID)
         useOfficialGameIdentity = v(.useOfficialGameIdentity, d.useOfficialGameIdentity)
         steamAccount = v(.steamAccount, d.steamAccount)
+        liveScoreFromScreen = v(.liveScoreFromScreen, d.liveScoreFromScreen)
         preferAnimatedArtwork = v(.preferAnimatedArtwork, d.preferAnimatedArtwork)
         priority = v(.priority, d.priority)
         for kind in SourceKind.allCases where !priority.contains(kind) { priority.append(kind) }
