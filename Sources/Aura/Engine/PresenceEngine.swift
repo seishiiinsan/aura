@@ -698,22 +698,30 @@ final class PresenceEngine {
             client = clientID(s.codingClientID, s)
             var file: String?, project: String?
             if let path = focused?.documentPath { file = (path as NSString).lastPathComponent }
-            if let title = focused?.title {
+            // JetBrains IDEs record the active project on disk: works without Accessibility.
+            let jetBrains = bundleID.flatMap(JetBrainsInspector.activeProject(bundleID:))
+            var title = focused?.title
+            if title == nil, let stored = jetBrains?.frameTitle, stored.contains(" – ") { title = stored }
+            if let title {
                 let parsed = WindowTitleParser.editor(title: title, appName: name, bundleID: bundleID)
                 file = file ?? parsed.file
                 project = parsed.project
             }
+            if project == nil { project = jetBrains?.name }
             if !s.showWindowTitles { file = nil; project = nil }
             p.details = file.map(t.editing) ?? t.codingIn(name)
             p.state = project.map(t.project) ?? (file != nil ? t.workspace(name) : nil)
             vars["file"] = file ?? ""
             vars["project"] = project ?? ""
             if s.showGitBranch || s.showRepoButton {
+                let jetBrainsRepo = jetBrains.map { URL(fileURLWithPath: $0.path) }
+                    .flatMap { FileManager.default.fileExists(atPath: $0.appendingPathComponent(".git").path) ? $0 : nil }
                 let repo = focused?.documentPath.flatMap(GitInspector.repository(containing:))
+                    ?? jetBrainsRepo
                     ?? project.flatMap { GitInspector.repository(named: $0, roots: s.projectRoots) }
                 if let repo, let git = GitInspector.info(repo: repo) {
                     vars["branch"] = git.branch
-                    if project == nil { project = repo.lastPathComponent }
+                    if project == nil, s.showWindowTitles { project = repo.lastPathComponent }
                     if s.showGitBranch {
                         p.state = "\(project.map(t.project) ?? t.workspace(name)) · \(git.branch)"
                     }
