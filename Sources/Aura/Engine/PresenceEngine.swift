@@ -61,6 +61,9 @@ final class PresenceEngine {
     @ObservationIgnored private var videoSessions: [String: Date] = [:]
     @ObservationIgnored private var wasIdle = false
     @ObservationIgnored private var tickCount = 0
+    /// Last code activity, kept on screen for a while after leaving the editor.
+    @ObservationIgnored private var lastCode: (draft: PresenceSnapshot, seen: Date)?
+    private static let codeLinger: TimeInterval = 15 * 60
     /// Start of the last GeForce NOW session seen, to detect new ones.
     @ObservationIgnored private var lastCloudSessionStart: Date?
 
@@ -389,6 +392,18 @@ final class PresenceEngine {
             drafts[kind] = draft
         }
         if s.historyEnabled { recordHistory(drafts, strings: strings) }
+        // Keep the Code presence while the editor stays open (for 15 min after leaving it),
+        // like editor extensions do: switching to Discord or a browser shouldn't erase it.
+        if let code = drafts[.code] {
+            lastCode = (code, Date())
+        } else if let last = lastCode {
+            let stillOpen = last.draft.sourceBundleID.map { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty } ?? false
+            if stillOpen, Date().timeIntervalSince(last.seen) < Self.codeLinger {
+                drafts[.code] = last.draft
+            } else {
+                lastCode = nil
+            }
+        }
         for kind in s.priority where s.isEnabled(kind) {
             if var draft = drafts[kind] {
                 // Apps & websites give way to the idle state; games, music and videos don't.
