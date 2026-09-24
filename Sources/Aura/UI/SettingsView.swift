@@ -499,6 +499,18 @@ struct SourcesPane: View {
                         }
                     }
                 }
+                IconRow(symbol: "scope", color: .orange, title: "Score en direct à l'écran",
+                        subtitle: ScreenScoreReader.hasPermission
+                            ? "CS2 sur GeForce NOW : lu dans le HUD toutes les 3 s."
+                            : "Nécessite l'autorisation Enregistrement de l'écran.") {
+                    if !ScreenScoreReader.hasPermission {
+                        Button("Autoriser…") { ScreenScoreReader.requestPermission() }
+                    }
+                    Toggle("", isOn: $store.settings.liveScoreFromScreen).labelsHidden().toggleStyle(.switch)
+                }
+                if let live = engine.liveScore {
+                    LabeledContent("Score lu à l'écran", value: "\(live.left) – \(live.right)\(live.clock.map { " · \($0)" } ?? "")")
+                }
             } header: {
                 Text("Jeux")
             } footer: {
@@ -595,6 +607,11 @@ struct PermissionsPane: View {
                                 : "Refusée pour : " + engine.automationDenied.sorted().joined(separator: ", "),
                               granted: engine.automationDenied.isEmpty) {
                     WindowInspector.openAutomationSettings()
+                }
+                PermissionRow(symbol: "rectangle.dashed.badge.record", color: .red, title: "Enregistrement de l'écran",
+                              detail: "Optionnel : lire le score en direct dans le HUD de CS2 sur GeForce NOW. Seule la barre de score est analysée, sur ton Mac.",
+                              granted: ScreenScoreReader.hasPermission) {
+                    ScreenScoreReader.requestPermission()
                 }
                 PermissionRow(symbol: "internaldrive.fill", color: .indigo, title: "Accès complet au disque",
                               detail: "Optionnel : détecter automatiquement les modes Concentration.",
