@@ -16,7 +16,7 @@ actor SteamWebPresence {
     func status(account: String, apiKey: String) async -> SteamStatus? {
         guard let id = await steamID64(account, apiKey: apiKey),
               let url = HTTP.url("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/", ["key": apiKey, "steamids": id]),
-              let json = await HTTP.json(url) as? [String: Any],
+              let json = await HTTP.json(url, fresh: true) as? [String: Any],
               let players = (json["response"] as? [String: Any])?["players"] as? [[String: Any]],
               let player = players.first,
               let name = player["gameextrainfo"] as? String,
